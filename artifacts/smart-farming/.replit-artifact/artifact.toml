@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "AI Smart Farming"
+version = "1.0.0"
+id = "artifacts/smart-farming"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24558
+
+[services.development]
+run = "pnpm --filter @workspace/smart-farming run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/smart-farming", "run", "build" ]
+publicDir = "artifacts/smart-farming/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24558"
+BASE_PATH = "/"

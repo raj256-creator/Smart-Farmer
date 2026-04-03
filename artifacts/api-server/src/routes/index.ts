@@ -1,8 +1,20 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import cropsRouter from "./crops";
+import soilRouter from "./soil";
+import climateRouter from "./climate";
+import recommendationsRouter from "./recommendations";
+import chatRouter from "./chat";
+import dashboardRouter from "./dashboard";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(cropsRouter);
+router.use(soilRouter);
+router.use(climateRouter);
+router.use(recommendationsRouter);
+router.use(chatRouter);
+router.use(dashboardRouter);
 
 export default router;

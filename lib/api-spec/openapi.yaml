@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: AI Smart Farming API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: crops
+    description: Crop scan and analysis operations
+  - name: soil
+    description: Soil data operations
+  - name: climate
+    description: Climate data operations
+  - name: recommendations
+    description: Farming recommendation and chatbot operations
+  - name: dashboard
+    description: Dashboard summary and analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +34,261 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /crops:
+    get:
+      operationId: listCropScans
+      tags: [crops]
+      summary: List all crop scans for the current user
+      parameters:
+        - in: query
+          name: cropType
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+        - in: query
+          name: offset
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of crop scans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CropScan"
+    post:
+      operationId: createCropScan
+      tags: [crops]
+      summary: Create a new crop scan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCropScanBody"
+      responses:
+        "201":
+          description: Created crop scan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CropScan"
+
+  /crops/{id}:
+    get:
+      operationId: getCropScan
+      tags: [crops]
+      summary: Get a specific crop scan
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Crop scan details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CropScan"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteCropScan
+      tags: [crops]
+      summary: Delete a crop scan
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /crops/{id}/analyze:
+    post:
+      operationId: analyzeCropScan
+      tags: [crops]
+      summary: Run AI analysis on crop scan (identification, health, yield, harvest prediction)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: AI analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CropAnalysis"
+
+  /soil:
+    get:
+      operationId: listSoilRecords
+      tags: [soil]
+      summary: List soil data records
+      parameters:
+        - in: query
+          name: cropScanId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of soil records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SoilData"
+    post:
+      operationId: createSoilData
+      tags: [soil]
+      summary: Add soil data for a crop scan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSoilDataBody"
+      responses:
+        "201":
+          description: Created soil record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoilData"
+
+  /climate:
+    get:
+      operationId: listClimateRecords
+      tags: [climate]
+      summary: List climate data records
+      parameters:
+        - in: query
+          name: cropScanId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of climate records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClimateData"
+    post:
+      operationId: createClimateData
+      tags: [climate]
+      summary: Add climate data for a crop scan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClimateDataBody"
+      responses:
+        "201":
+          description: Created climate record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClimateData"
+
+  /recommendations:
+    get:
+      operationId: listRecommendations
+      tags: [recommendations]
+      summary: List recommendations
+      parameters:
+        - in: query
+          name: cropScanId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recommendation"
+
+  /chat:
+    post:
+      operationId: sendChatMessage
+      tags: [recommendations]
+      summary: Send a message to the farming AI chatbot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageBody"
+      responses:
+        "200":
+          description: Chatbot response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get overall dashboard stats and summaries
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent:
+    get:
+      operationId: getRecentScans
+      tags: [dashboard]
+      summary: Get the most recent crop scans with analysis
+      responses:
+        "200":
+          description: Recent scans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CropScan"
+
+  /dashboard/crop-stats:
+    get:
+      operationId: getCropStats
+      tags: [dashboard]
+      summary: Get stats broken down by crop type
+      responses:
+        "200":
+          description: Crop stats by type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CropStatItem"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +299,269 @@ components:
       required:
         - status
 
+    CropScan:
+      type: object
+      properties:
+        id:
+          type: integer
+        cropType:
+          type: ["string", "null"]
+        growthStage:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+        healthStatus:
+          type: ["string", "null"]
+        diseaseDetected:
+          type: ["string", "null"]
+        nutrientDeficiency:
+          type: ["string", "null"]
+        yieldPredictionKg:
+          type: ["number", "null"]
+        harvestDaysRemaining:
+          type: ["integer", "null"]
+        harvestWindow:
+          type: ["string", "null"]
+        confidence:
+          type: ["number", "null"]
+        analysisNotes:
+          type: ["string", "null"]
+        analyzed:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - analyzed
+        - createdAt
+        - updatedAt
+
+    CreateCropScanBody:
+      type: object
+      properties:
+        cropType:
+          type: ["string", "null"]
+        imageUrl:
+          type: ["string", "null"]
+      required: []
+
+    CropAnalysis:
+      type: object
+      properties:
+        cropType:
+          type: string
+        growthStage:
+          type: string
+        healthStatus:
+          type: string
+        diseaseDetected:
+          type: ["string", "null"]
+        nutrientDeficiency:
+          type: ["string", "null"]
+        yieldPredictionKg:
+          type: number
+        harvestDaysRemaining:
+          type: integer
+        harvestWindow:
+          type: string
+        confidence:
+          type: number
+        analysisNotes:
+          type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+      required:
+        - cropType
+        - growthStage
+        - healthStatus
+        - yieldPredictionKg
+        - harvestDaysRemaining
+        - harvestWindow
+        - confidence
+        - analysisNotes
+        - recommendations
+
+    SoilData:
+      type: object
+      properties:
+        id:
+          type: integer
+        cropScanId:
+          type: integer
+        phLevel:
+          type: ["number", "null"]
+        moisturePercent:
+          type: ["number", "null"]
+        nitrogenPpm:
+          type: ["number", "null"]
+        phosphorusPpm:
+          type: ["number", "null"]
+        potassiumPpm:
+          type: ["number", "null"]
+        organicMatterPercent:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - cropScanId
+        - createdAt
+
+    CreateSoilDataBody:
+      type: object
+      properties:
+        cropScanId:
+          type: integer
+        phLevel:
+          type: ["number", "null"]
+        moisturePercent:
+          type: ["number", "null"]
+        nitrogenPpm:
+          type: ["number", "null"]
+        phosphorusPpm:
+          type: ["number", "null"]
+        potassiumPpm:
+          type: ["number", "null"]
+        organicMatterPercent:
+          type: ["number", "null"]
+      required:
+        - cropScanId
+
+    ClimateData:
+      type: object
+      properties:
+        id:
+          type: integer
+        cropScanId:
+          type: integer
+        temperatureCelsius:
+          type: ["number", "null"]
+        humidityPercent:
+          type: ["number", "null"]
+        rainfallMm:
+          type: ["number", "null"]
+        windSpeedKmh:
+          type: ["number", "null"]
+        sunlightHours:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - cropScanId
+        - createdAt
+
+    CreateClimateDataBody:
+      type: object
+      properties:
+        cropScanId:
+          type: integer
+        temperatureCelsius:
+          type: ["number", "null"]
+        humidityPercent:
+          type: ["number", "null"]
+        rainfallMm:
+          type: ["number", "null"]
+        windSpeedKmh:
+          type: ["number", "null"]
+        sunlightHours:
+          type: ["number", "null"]
+      required:
+        - cropScanId
+
+    Recommendation:
+      type: object
+      properties:
+        id:
+          type: integer
+        cropScanId:
+          type: integer
+        type:
+          type: string
+        message:
+          type: string
+        priority:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - cropScanId
+        - type
+        - message
+        - priority
+        - createdAt
+
+    ChatMessageBody:
+      type: object
+      properties:
+        message:
+          type: string
+        cropScanId:
+          type: ["integer", "null"]
+        cropType:
+          type: ["string", "null"]
+      required:
+        - message
+
+    ChatResponse:
+      type: object
+      properties:
+        reply:
+          type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+      required:
+        - reply
+        - suggestions
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalScans:
+          type: integer
+        analyzedScans:
+          type: integer
+        healthyCount:
+          type: integer
+        diseasedCount:
+          type: integer
+        avgYieldKg:
+          type: number
+        avgHarvestDays:
+          type: integer
+        cropBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/CropStatItem"
+      required:
+        - totalScans
+        - analyzedScans
+        - healthyCount
+        - diseasedCount
+        - avgYieldKg
+        - avgHarvestDays
+        - cropBreakdown
+
+    CropStatItem:
+      type: object
+      properties:
+        cropType:
+          type: string
+        count:
+          type: integer
+        avgYieldKg:
+          type: number
+        avgHealthScore:
+          type: number
+      required:
+        - cropType
+        - count
+        - avgYieldKg
+        - avgHealthScore

@@ -1,0 +1,129 @@
+AI Smart Farming Web System
+Project Title:
+AI-Based Crop Identification, Growth Monitoring, Yield Prediction and Smart Farming Recommendation System
+______________
+🎯 Objective
+Build a web-based AI Smart Farming System that allows farmers to:
+•	Capture/upload crop images via smartphone 
+•	Identify crop type and growth stage using AI 
+•	Monitor crop health using image + soil + climate data 
+•	Detect diseases and defects 
+•	Predict yield and harvest timeline 
+•	Get smart farming recommendations via chatbot 
+•	Store and visualize all results in a dashboard 
+______________
+🌱 Supported Crops (STRICT)
+The system must work ONLY for these 5 fruit plants:
+1.	Mango 
+2.	Dragon Fruit 
+3.	Chikoo (Sapota) 
+4.	Pomegranate 
+5.	Mulberry 
+______________
+🧠 Core Features
+1. 📸 Image Capture & Upload
+•	Capture crop image using smartphone camera OR upload image 
+•	Store image in Supabase storage 
+______________
+2. 🌿 Crop Identification & Growth Stage Detection
+•	Use AI/ML model (CNN or pre-trained vision model) 
+•	Output: 
+o	Crop type (from given 5 only) 
+o	Growth stage (e.g., seedling, vegetative, flowering, fruiting) 
+______________
+3. 🩺 Crop Health Monitoring
+Inputs:
+•	Image data 
+•	Soil data (pH, moisture, nutrients) 
+•	Climate data (temperature, humidity, rainfall) 
+Processing:
+•	Analyze crop health condition 
+•	Detect: 
+o	Diseases 
+o	Nutrient deficiencies 
+o	Physical defects 
+______________
+4. 📊 Yield Prediction
+•	Predict expected yield using: 
+o	Crop type 
+o	Growth stage 
+o	Health condition 
+o	Soil + weather data 
+______________
+5. 📅 Harvest Prediction
+•	Predict: 
+o	Harvest timeline (days remaining) 
+o	Best harvest window 
+______________
+6. 🤖 Smart Recommendation System (Chatbot)
+Provide recommendations for:
+•	Fertilizer usage 
+•	Harvest advisory 
+Chatbot should:
+•	Be conversational 
+•	Answer queries based on crop data 
+•	Use rule-based + AI logic 
+______________
+7. 📈 Dashboard
+•	Display: 
+o	Crop details 
+o	Growth stage 
+o	Health report 
+o	Disease detection results 
+o	Yield prediction 
+o	Harvest date 
+o	Recommendations 
+•	Use charts and visual analytics 
+______________
+🗄️ Backend & Database (MANDATORY)
+Use Supabase:
+•	Authentication (farmer login) 
+•	Database tables: 
+o	Users 
+o	Crop Images 
+o	Crop Data 
+o	Soil Data 
+o	Climate Data 
+o	Predictions 
+o	Recommendations 
+•	Storage for images 
+______________
+______________
+🔄 System Workflow (STRICT FLOW)
+1.	Upload crop image 
+2.	Identify crop type 
+3.	Classify growth stage 
+4.	Input soil data 
+5.	Input climate data 
+6.	Analyze crop health 
+7.	Generate health report 
+8.	Predict crop yield 
+9.	Predict harvest date 
+10.	Generate recommendations: 
+•	Irrigation 
+•	Harvest advisory 
+11.	Display all results in dashboard 
+______________
+🎨 UI Requirements
+•	Mobile-friendly (farmer-focused) 
+•	Simple and clean interface 
+•	Sections: 
+o	Upload Image 
+o	Input Data Forms 
+o	Results Dashboard 
+o	Chatbot Assistant 
+______________
+📦 Expected Output from AI Tool
+•	Full project architecture 
+•	Frontend code (React) 
+•	Backend APIs 
+•	AI model integration approach 
+•	Supabase schema 
+•	Dashboard UI 
+•	Chatbot logic 
+______________
+⚠️ Constraints
+•	Use ONLY the 5 specified crops 
+•	Must integrate Supabase 
+•	Must follow given workflow exactly 
+•	Must be scalable and modular
