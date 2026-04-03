@@ -12,7 +12,7 @@ import {
   useCreateClimateData,
   useAnalyzeCropScan
 } from "@workspace/api-client-react";
-import { Loader2, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowRight, CheckCircle2, Brain } from "lucide-react";
 
 export default function ScanWizard() {
   const [, setLocation] = useLocation();
