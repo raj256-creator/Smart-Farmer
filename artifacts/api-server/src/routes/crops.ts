@@ -105,7 +105,7 @@ router.post("/crops/:id/analyze", async (req, res): Promise<void> => {
   const [soilRecord] = await db.select().from(soilDataTable).where(eq(soilDataTable.cropScanId, params.data.id));
   const [climateRecord] = await db.select().from(climateDataTable).where(eq(climateDataTable.cropScanId, params.data.id));
 
-  const analysis = runAIAnalysis(scan.cropType, scan.imageUrl, soilRecord ?? {}, climateRecord ?? {});
+  const analysis = await runAIAnalysis(scan.cropType, scan.imageUrl, soilRecord ?? {}, climateRecord ?? {});
 
   await db
     .update(cropScansTable)

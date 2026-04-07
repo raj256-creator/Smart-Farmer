@@ -21,7 +21,7 @@ router.post("/chat", async (req, res): Promise<void> => {
     if (scan?.cropType) resolvedCropType = scan.cropType;
   }
 
-  const response = generateChatResponse(message, resolvedCropType);
+  const response = await generateChatResponse(message, resolvedCropType);
   res.json(response);
 });
 
