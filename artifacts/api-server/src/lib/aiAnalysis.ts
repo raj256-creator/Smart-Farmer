@@ -4,24 +4,14 @@ const CROPS = ["Mango", "Dragon Fruit", "Chikoo", "Pomegranate", "Mulberry"] as 
 type CropType = typeof CROPS[number];
 
 const GROWTH_STAGES = ["Seedling", "Vegetative", "Flowering", "Fruiting", "Mature"] as const;
-const HEALTH_STATUSES = ["Excellent", "Good", "Fair", "Poor", "Critical"] as const;
-const DISEASES: Record<CropType, string[]> = {
-  Mango: ["Anthracnose", "Powdery Mildew", "Bacterial Canker", "Mango Malformation", "None Detected"],
-  "Dragon Fruit": ["Stem Rot", "Anthracnose", "Fusarium Wilt", "Bacterial Soft Rot", "None Detected"],
-  Chikoo: ["Leaf Blight", "Sooty Mold", "Bud Necrosis", "Fruit Rot", "None Detected"],
-  Pomegranate: ["Bacterial Blight", "Alternaria Fruit Rot", "Cercospora Leaf Spot", "Heart Rot", "None Detected"],
-  Mulberry: ["Leaf Spot", "Powdery Mildew", "Bacterial Blight", "Twig Blight", "None Detected"],
-};
 
-const DEFICIENCIES = [
-  "None Detected",
-  "Nitrogen Deficiency",
-  "Phosphorus Deficiency",
-  "Potassium Deficiency",
-  "Iron Deficiency",
-  "Magnesium Deficiency",
-  "Calcium Deficiency",
-];
+const DISEASES: Record<CropType, string[]> = {
+  Mango: ["Anthracnose", "Powdery Mildew", "Bacterial Canker", "Mango Malformation"],
+  "Dragon Fruit": ["Stem Rot", "Anthracnose", "Fusarium Wilt", "Bacterial Soft Rot"],
+  Chikoo: ["Leaf Blight", "Sooty Mold", "Bud Necrosis", "Fruit Rot"],
+  Pomegranate: ["Bacterial Blight", "Alternaria Fruit Rot", "Cercospora Leaf Spot", "Heart Rot"],
+  Mulberry: ["Leaf Spot", "Powdery Mildew", "Bacterial Blight", "Twig Blight"],
+};
 
 const YIELD_RANGES: Record<CropType, [number, number]> = {
   Mango: [50, 300],
@@ -39,12 +29,39 @@ const HARVEST_DAYS: Record<CropType, Record<string, [number, number]>> = {
   Mulberry: { Seedling: [120, 180], Vegetative: [60, 120], Flowering: [30, 60], Fruiting: [15, 30], Mature: [5, 15] },
 };
 
-function randomInRange(min: number, max: number): number {
-  return Math.round((Math.random() * (max - min) + min) * 10) / 10;
+// ─── Seeded PRNG (mulberry32) ────────────────────────────────────────────────
+// Produces deterministic results from the same input hash — no Math.random()
+function hashInputs(soil: SoilInput, climate: ClimateInput, cropType: CropType): number {
+  const vals = [
+    Math.round((soil.phLevel ?? 7.0) * 100),
+    Math.round((soil.moisturePercent ?? 50) * 10),
+    Math.round(soil.nitrogenPpm ?? 150),
+    Math.round(soil.phosphorusPpm ?? 30),
+    Math.round(soil.potassiumPpm ?? 200),
+    Math.round((soil.organicMatterPercent ?? 3) * 10),
+    Math.round((climate.temperatureCelsius ?? 28) * 10),
+    Math.round((climate.humidityPercent ?? 65) * 10),
+    Math.round(climate.rainfallMm ?? 50),
+    Math.round((climate.windSpeedKmh ?? 10) * 10),
+    Math.round((climate.sunlightHours ?? 6) * 10),
+    CROPS.indexOf(cropType),
+  ];
+  let h = 0x12345678;
+  for (const v of vals) {
+    h = Math.imul(h ^ v, 0x9e3779b9);
+    h ^= h >>> 16;
+  }
+  return h >>> 0;
 }
 
-function pickRandom<T>(arr: readonly T[] | T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+function makeRng(seed: number) {
+  let s = seed;
+  return () => {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    return (s >>> 0) / 4294967296;
+  };
 }
 
 export interface SoilInput {
@@ -78,46 +95,290 @@ export interface AnalysisResult {
   recommendations: string[];
 }
 
+// ─── Ideal ranges per crop ────────────────────────────────────────────────────
+const IDEAL_PH: Record<CropType, [number, number]> = {
+  Mango: [5.5, 7.5],
+  "Dragon Fruit": [6.0, 7.5],
+  Chikoo: [6.0, 8.0],
+  Pomegranate: [5.5, 7.5],
+  Mulberry: [6.0, 7.5],
+};
+
+const IDEAL_TEMP: Record<CropType, [number, number]> = {
+  Mango: [21, 35],
+  "Dragon Fruit": [18, 35],
+  Chikoo: [20, 38],
+  Pomegranate: [18, 35],
+  Mulberry: [15, 30],
+};
+
+const IDEAL_NITROGEN: Record<CropType, [number, number]> = {
+  Mango: [120, 280],
+  "Dragon Fruit": [80, 200],
+  Chikoo: [100, 250],
+  Pomegranate: [100, 260],
+  Mulberry: [150, 350],
+};
+
+const IDEAL_PHOSPHORUS: Record<CropType, [number, number]> = {
+  Mango: [20, 60],
+  "Dragon Fruit": [15, 50],
+  Chikoo: [20, 55],
+  Pomegranate: [20, 60],
+  Mulberry: [25, 65],
+};
+
+const IDEAL_POTASSIUM: Record<CropType, [number, number]> = {
+  Mango: [150, 400],
+  "Dragon Fruit": [100, 300],
+  Chikoo: [120, 350],
+  Pomegranate: [150, 400],
+  Mulberry: [100, 280],
+};
+
+// ─── Analytical health score (0..1) ──────────────────────────────────────────
+// Each parameter contributes a defined penalty — no randomness.
 function computeHealthScore(soil: SoilInput, climate: ClimateInput, cropType: CropType): number {
-  let score = 0.8;
+  let score = 1.0;
+  let factorsChecked = 0;
 
   if (soil.phLevel != null) {
-    const idealPh: Record<CropType, [number, number]> = {
-      Mango: [5.5, 7.5],
-      "Dragon Fruit": [6.0, 7.5],
-      Chikoo: [6.0, 8.0],
-      Pomegranate: [5.5, 7.5],
-      Mulberry: [6.0, 7.5],
-    };
-    const [lo, hi] = idealPh[cropType];
-    if (soil.phLevel < lo - 1 || soil.phLevel > hi + 1) score -= 0.2;
-    else if (soil.phLevel < lo || soil.phLevel > hi) score -= 0.1;
+    factorsChecked++;
+    const [lo, hi] = IDEAL_PH[cropType];
+    const ph = soil.phLevel;
+    if (ph < lo - 1.5 || ph > hi + 1.5) score -= 0.25;
+    else if (ph < lo - 0.5 || ph > hi + 0.5) score -= 0.15;
+    else if (ph < lo || ph > hi) score -= 0.07;
   }
 
   if (soil.moisturePercent != null) {
-    if (soil.moisturePercent < 20 || soil.moisturePercent > 85) score -= 0.15;
+    factorsChecked++;
+    const m = soil.moisturePercent;
+    if (m < 15 || m > 90) score -= 0.20;
+    else if (m < 25 || m > 80) score -= 0.10;
+    else if (m < 35 || m > 75) score -= 0.03;
+  }
+
+  if (soil.nitrogenPpm != null) {
+    factorsChecked++;
+    const [lo, hi] = IDEAL_NITROGEN[cropType];
+    const n = soil.nitrogenPpm;
+    if (n < lo * 0.4 || n > hi * 1.6) score -= 0.20;
+    else if (n < lo * 0.7 || n > hi * 1.3) score -= 0.12;
+    else if (n < lo || n > hi) score -= 0.05;
+  }
+
+  if (soil.phosphorusPpm != null) {
+    factorsChecked++;
+    const [lo, hi] = IDEAL_PHOSPHORUS[cropType];
+    const p = soil.phosphorusPpm;
+    if (p < lo * 0.4 || p > hi * 1.6) score -= 0.15;
+    else if (p < lo * 0.7 || p > hi * 1.3) score -= 0.08;
+    else if (p < lo || p > hi) score -= 0.04;
+  }
+
+  if (soil.potassiumPpm != null) {
+    factorsChecked++;
+    const [lo, hi] = IDEAL_POTASSIUM[cropType];
+    const k = soil.potassiumPpm;
+    if (k < lo * 0.4 || k > hi * 1.6) score -= 0.15;
+    else if (k < lo * 0.7 || k > hi * 1.3) score -= 0.08;
+    else if (k < lo || k > hi) score -= 0.04;
   }
 
   if (climate.temperatureCelsius != null) {
-    const idealTemp: Record<CropType, [number, number]> = {
-      Mango: [21, 35],
-      "Dragon Fruit": [18, 35],
-      Chikoo: [20, 38],
-      Pomegranate: [18, 35],
-      Mulberry: [15, 30],
-    };
-    const [lo, hi] = idealTemp[cropType];
-    if (climate.temperatureCelsius < lo - 5 || climate.temperatureCelsius > hi + 5) score -= 0.2;
+    factorsChecked++;
+    const [lo, hi] = IDEAL_TEMP[cropType];
+    const t = climate.temperatureCelsius;
+    if (t < lo - 8 || t > hi + 8) score -= 0.20;
+    else if (t < lo - 4 || t > hi + 4) score -= 0.12;
+    else if (t < lo || t > hi) score -= 0.05;
   }
 
   if (climate.humidityPercent != null) {
-    if (climate.humidityPercent > 90) score -= 0.1;
-    else if (climate.humidityPercent < 30) score -= 0.15;
+    factorsChecked++;
+    const h = climate.humidityPercent;
+    if (h > 95 || h < 20) score -= 0.15;
+    else if (h > 85 || h < 30) score -= 0.08;
+    else if (h > 75 || h < 40) score -= 0.03;
   }
 
-  return Math.max(0.1, Math.min(1.0, score + (Math.random() * 0.1 - 0.05)));
+  if (climate.rainfallMm != null) {
+    factorsChecked++;
+    const r = climate.rainfallMm;
+    if (r > 200) score -= 0.12;
+    else if (r > 120) score -= 0.06;
+    else if (r < 5) score -= 0.08;
+  }
+
+  // If we have very few data points, reduce score slightly (uncertainty penalty)
+  if (factorsChecked < 3) score -= 0.05;
+
+  return Math.max(0.05, Math.min(0.98, score));
 }
 
+// ─── Nutrient deficiency from actual NPK values ───────────────────────────────
+function detectNutrientDeficiency(
+  soil: SoilInput,
+  cropType: CropType,
+  rng: () => number
+): string | null {
+  const deficiencies: string[] = [];
+
+  if (soil.nitrogenPpm != null) {
+    const [lo] = IDEAL_NITROGEN[cropType];
+    if (soil.nitrogenPpm < lo * 0.55) deficiencies.push("Nitrogen Deficiency");
+  }
+  if (soil.phosphorusPpm != null) {
+    const [lo] = IDEAL_PHOSPHORUS[cropType];
+    if (soil.phosphorusPpm < lo * 0.55) deficiencies.push("Phosphorus Deficiency");
+  }
+  if (soil.potassiumPpm != null) {
+    const [lo] = IDEAL_POTASSIUM[cropType];
+    if (soil.potassiumPpm < lo * 0.55) deficiencies.push("Potassium Deficiency");
+  }
+
+  // pH-driven micronutrient deficiencies
+  if (soil.phLevel != null) {
+    if (soil.phLevel > 7.8) deficiencies.push("Iron Deficiency"); // Iron locks up in alkaline soil
+    if (soil.phLevel < 5.2) deficiencies.push("Calcium Deficiency");
+    if (soil.phLevel > 8.0) deficiencies.push("Magnesium Deficiency");
+  }
+
+  if (deficiencies.length === 0) return null;
+
+  // If multiple deficiencies, return the most severe one (first in list)
+  return deficiencies[0];
+}
+
+// ─── Disease risk from climate + health ──────────────────────────────────────
+function detectDisease(
+  cropType: CropType,
+  healthScore: number,
+  climate: ClimateInput,
+  rng: () => number
+): string | null {
+  // Disease risk is driven by humidity and temperature — not random
+  const humidity = climate.humidityPercent ?? 60;
+  const temp = climate.temperatureCelsius ?? 28;
+  const rainfall = climate.rainfallMm ?? 30;
+
+  // Fungal disease threshold: high humidity + warm temp
+  const fungalRisk = (humidity > 80 ? 0.5 : humidity > 70 ? 0.25 : 0.0)
+    + (temp > 25 && temp < 35 ? 0.15 : 0.0)
+    + (rainfall > 100 ? 0.15 : 0.0)
+    + (healthScore < 0.5 ? 0.3 : healthScore < 0.7 ? 0.15 : 0.0);
+
+  // Bacterial disease threshold: very wet + warm
+  const bacterialRisk = (humidity > 85 ? 0.4 : 0.0)
+    + (rainfall > 150 ? 0.2 : 0.0)
+    + (healthScore < 0.45 ? 0.25 : 0.0);
+
+  const overallRisk = Math.max(fungalRisk, bacterialRisk);
+
+  if (overallRisk < 0.3) return null; // Below threshold — no disease
+
+  // Deterministically pick which disease based on rng seeded from inputs
+  const diseaseList = DISEASES[cropType];
+  // Prefer bacterial diseases when bacterialRisk is dominant
+  const preferBacterial = bacterialRisk > fungalRisk;
+  const candidates = preferBacterial
+    ? diseaseList.filter(d => d.toLowerCase().includes("bacterial") || d.toLowerCase().includes("rot") || d.toLowerCase().includes("blight"))
+    : diseaseList.filter(d => !d.toLowerCase().includes("bacterial"));
+
+  const pool = candidates.length > 0 ? candidates : diseaseList;
+  return pool[Math.floor(rng() * pool.length)];
+}
+
+// ─── Growth stage from soil + climate data ────────────────────────────────────
+// High N → vegetative; balanced N+P+K → flowering; high K, low N → fruiting/mature
+function inferGrowthStage(soil: SoilInput, climate: ClimateInput, cropType: CropType, rng: () => number): string {
+  const n = soil.nitrogenPpm;
+  const p = soil.phosphorusPpm;
+  const k = soil.potassiumPpm;
+
+  if (n != null && p != null && k != null) {
+    const total = n + p + k;
+    if (total === 0) return GROWTH_STAGES[Math.floor(rng() * GROWTH_STAGES.length)];
+
+    const nRatio = n / total;
+    const kRatio = k / total;
+
+    if (nRatio > 0.65) return "Vegetative";            // Nitrogen-dominant → heavy vegetative
+    if (nRatio > 0.50 && kRatio < 0.25) return "Seedling";
+    if (kRatio > 0.45 && nRatio < 0.30) return "Mature"; // Potassium-dominant + low N
+    if (kRatio > 0.35 && nRatio < 0.40) return "Fruiting";
+    if (Math.abs(nRatio - kRatio) < 0.12) return "Flowering"; // Balanced → flowering
+
+    return "Vegetative"; // Default when inputs are present but unclear
+  }
+
+  // Fall back to seeded-random when nutrients not provided
+  return GROWTH_STAGES[Math.floor(rng() * GROWTH_STAGES.length)];
+}
+
+// ─── Confidence from data completeness ───────────────────────────────────────
+function computeConfidence(soil: SoilInput, climate: ClimateInput): number {
+  const fields = [
+    soil.phLevel, soil.moisturePercent, soil.nitrogenPpm,
+    soil.phosphorusPpm, soil.potassiumPpm,
+    climate.temperatureCelsius, climate.humidityPercent, climate.rainfallMm,
+  ];
+  const filled = fields.filter(f => f != null).length;
+  // 5 fields → 82%, 8 fields → 97%
+  const base = 0.65 + (filled / fields.length) * 0.32;
+  return Math.round(base * 100) / 100;
+}
+
+// ─── Analytical yield prediction ──────────────────────────────────────────────
+function computeYield(
+  cropType: CropType,
+  healthScore: number,
+  growthStage: string,
+  soil: SoilInput,
+  climate: ClimateInput
+): number {
+  const [yieldMin, yieldMax] = YIELD_RANGES[cropType];
+  const range = yieldMax - yieldMin;
+
+  // Base yield from health score (0..1 → fraction of range)
+  let fraction = healthScore;
+
+  // Bonus for optimal NPK
+  if (soil.nitrogenPpm != null) {
+    const [lo, hi] = IDEAL_NITROGEN[cropType];
+    const midN = (lo + hi) / 2;
+    const closeness = 1 - Math.min(Math.abs(soil.nitrogenPpm - midN) / midN, 1);
+    fraction += closeness * 0.08;
+  }
+  if (soil.potassiumPpm != null) {
+    const [lo, hi] = IDEAL_POTASSIUM[cropType];
+    const midK = (lo + hi) / 2;
+    const closeness = 1 - Math.min(Math.abs(soil.potassiumPpm - midK) / midK, 1);
+    fraction += closeness * 0.07;
+  }
+
+  // Rainfall bonus (moderate rainfall is best)
+  if (climate.rainfallMm != null) {
+    const r = climate.rainfallMm;
+    if (r >= 30 && r <= 80) fraction += 0.05;
+    else if (r > 150) fraction -= 0.08;
+  }
+
+  // Sunlight bonus
+  if (climate.sunlightHours != null && climate.sunlightHours >= 6) {
+    fraction += 0.04;
+  }
+
+  // Fruiting/mature stage has best realised yield
+  if (growthStage === "Fruiting") fraction += 0.05;
+  if (growthStage === "Mature") fraction += 0.08;
+
+  fraction = Math.max(0.1, Math.min(1.0, fraction));
+  return Math.round(yieldMin + fraction * range);
+}
+
+// ─── Recommendations ──────────────────────────────────────────────────────────
 function generateRecommendations(
   cropType: CropType,
   growthStage: string,
@@ -129,61 +390,106 @@ function generateRecommendations(
 ): string[] {
   const recs: string[] = [];
 
-  if (soil.phLevel != null && soil.phLevel < 5.5) recs.push("Apply agricultural lime to raise soil pH to optimal range (6.0-7.0).");
-  if (soil.phLevel != null && soil.phLevel > 7.5) recs.push("Apply sulfur or acidic fertilizers to lower soil pH.");
-  if (soil.moisturePercent != null && soil.moisturePercent < 25) recs.push("Increase irrigation frequency — soil moisture is critically low.");
-  if (soil.moisturePercent != null && soil.moisturePercent > 80) recs.push("Reduce irrigation and improve drainage to prevent root rot.");
+  // pH corrections
+  if (soil.phLevel != null) {
+    const [lo, hi] = IDEAL_PH[cropType];
+    if (soil.phLevel < lo - 0.5) recs.push(`Soil pH is ${soil.phLevel} — apply agricultural lime to raise pH toward the optimal range (${lo}–${hi}) for ${cropType}.`);
+    else if (soil.phLevel > hi + 0.5) recs.push(`Soil pH is ${soil.phLevel} — apply elemental sulfur or acidic fertilizer to bring pH down to ${lo}–${hi}.`);
+  }
 
-  if (deficiency === "Nitrogen Deficiency") recs.push("Apply nitrogen-rich fertilizer (urea or ammonium sulfate) at recommended rates.");
-  if (deficiency === "Phosphorus Deficiency") recs.push("Apply superphosphate or rock phosphate to address phosphorus shortage.");
-  if (deficiency === "Potassium Deficiency") recs.push("Apply potassium sulfate or muriate of potash for improved fruiting.");
-  if (deficiency === "Iron Deficiency") recs.push("Apply chelated iron (EDTA-Fe) as foliar spray for iron deficiency correction.");
-  if (deficiency === "Magnesium Deficiency") recs.push("Apply Epsom salt (magnesium sulfate) as foliar spray.");
+  // Moisture corrections
+  if (soil.moisturePercent != null) {
+    if (soil.moisturePercent < 25) recs.push(`Soil moisture is critically low at ${soil.moisturePercent}% — increase irrigation immediately.`);
+    else if (soil.moisturePercent > 80) recs.push(`Soil moisture is excessive at ${soil.moisturePercent}% — reduce irrigation and improve drainage to prevent root rot.`);
+  }
 
-  if (disease && disease !== "None Detected") {
-    if (disease.includes("Mildew") || disease.includes("Rot") || disease.includes("Blight")) {
-      recs.push(`Spray copper-based fungicide to manage ${disease}. Remove infected parts immediately.`);
+  // Nutrient corrections based on actual values
+  if (soil.nitrogenPpm != null) {
+    const [lo, hi] = IDEAL_NITROGEN[cropType];
+    if (soil.nitrogenPpm < lo * 0.7) recs.push(`Nitrogen is low at ${soil.nitrogenPpm} ppm (ideal: ${lo}–${hi} ppm) — apply urea or ammonium sulfate at recommended rates.`);
+    else if (soil.nitrogenPpm > hi * 1.3) recs.push(`Nitrogen is excessive at ${soil.nitrogenPpm} ppm — reduce nitrogen fertilizer to avoid vegetative overgrowth and poor fruit set.`);
+  }
+  if (soil.phosphorusPpm != null) {
+    const [lo, hi] = IDEAL_PHOSPHORUS[cropType];
+    if (soil.phosphorusPpm < lo * 0.7) recs.push(`Phosphorus is low at ${soil.phosphorusPpm} ppm (ideal: ${lo}–${hi} ppm) — apply superphosphate or rock phosphate.`);
+  }
+  if (soil.potassiumPpm != null) {
+    const [lo, hi] = IDEAL_POTASSIUM[cropType];
+    if (soil.potassiumPpm < lo * 0.7) recs.push(`Potassium is low at ${soil.potassiumPpm} ppm (ideal: ${lo}–${hi} ppm) — apply potassium sulfate for improved fruit quality.`);
+  }
+
+  // Deficiency-specific advice
+  if (deficiency === "Iron Deficiency") recs.push("Apply chelated iron (EDTA-Fe) as a foliar spray to correct iron deficiency caused by high soil pH.");
+  if (deficiency === "Magnesium Deficiency") recs.push("Apply Epsom salt (magnesium sulfate) as a foliar spray — 20 g per litre of water.");
+  if (deficiency === "Calcium Deficiency") recs.push("Apply calcium nitrate or gypsum to correct calcium deficiency and improve cell wall strength.");
+
+  // Disease advice
+  if (disease) {
+    if (disease.includes("Mildew") || disease.includes("Rot") || disease.includes("Blight") || disease.includes("Spot") || disease.includes("Necrosis")) {
+      recs.push(`${disease} detected — spray copper-based fungicide (copper oxychloride 0.3%) every 10 days. Remove and destroy infected plant parts.`);
     }
     if (disease.includes("Bacterial")) {
-      recs.push(`Apply Bordeaux mixture or copper oxychloride to control ${disease}.`);
+      recs.push(`${disease} detected — apply Bordeaux mixture (1%). Avoid overhead irrigation and improve air circulation between plants.`);
     }
-    recs.push("Ensure proper spacing and air circulation to prevent disease spread.");
+    if (disease.includes("Wilt")) {
+      recs.push(`${disease} detected — drench the root zone with carbendazim (0.1%). Remove and destroy heavily infected plants.`);
+    }
+    if (climate.humidityPercent != null && climate.humidityPercent > 80) {
+      recs.push(`High humidity (${climate.humidityPercent}%) is increasing disease pressure — ensure good air circulation and reduce canopy density by pruning.`);
+    }
   }
 
-  if (growthStage === "Flowering") recs.push("Avoid excessive nitrogen during flowering — it promotes vegetative growth at the expense of fruit set.");
+  // Growth-stage-specific advice
+  if (growthStage === "Flowering") {
+    recs.push("Avoid heavy nitrogen application at flowering — it promotes vegetative growth over fruit set.");
+    recs.push("Spray 0.5% boron solution during flowering to improve pollination and fruit set.");
+  }
   if (growthStage === "Fruiting") {
-    recs.push("Apply potassium-rich fertilizer to improve fruit quality and size.");
-    if (cropType === "Mango") recs.push("Protect developing mangoes from fruit fly using pheromone traps.");
-    if (cropType === "Pomegranate") recs.push("Thin fruits to 2-3 per cluster to achieve maximum fruit size.");
+    recs.push("Apply potassium-rich fertilizer (K₂SO₄) to improve fruit size, color, and sweetness.");
+    if (cropType === "Mango") recs.push("Install pheromone traps to control fruit fly — a key pest during fruit development.");
+    if (cropType === "Pomegranate") recs.push("Thin fruit clusters to 2–3 fruits per shoot to maximize individual fruit size.");
   }
-  if (growthStage === "Mature") recs.push("Monitor daily for harvest readiness. Check color change, firmness, and sugar content.");
+  if (growthStage === "Mature") recs.push("Monitor daily for harvest readiness. Check color change, firmness, and sugar content (Brix).");
 
-  if (climate.rainfallMm != null && climate.rainfallMm > 100) recs.push("High rainfall detected — inspect for fungal disease and improve field drainage.");
-  if (climate.windSpeedKmh != null && climate.windSpeedKmh > 40) recs.push("High winds can cause physical damage — consider windbreaks or crop staking.");
+  // Climate corrections
+  if (climate.rainfallMm != null && climate.rainfallMm > 120) recs.push(`Rainfall is high at ${climate.rainfallMm} mm — inspect for waterlogging and fungal spread. Improve field drainage.`);
+  if (climate.temperatureCelsius != null) {
+    const [lo, hi] = IDEAL_TEMP[cropType];
+    if (climate.temperatureCelsius < lo - 3) recs.push(`Temperature (${climate.temperatureCelsius}°C) is below the optimal range for ${cropType}. Use mulching to insulate roots and reduce cold stress.`);
+    if (climate.temperatureCelsius > hi + 3) recs.push(`Temperature (${climate.temperatureCelsius}°C) is above optimal — apply shade nets and increase irrigation frequency to reduce heat stress.`);
+  }
 
   if (healthStatus === "Poor" || healthStatus === "Critical") {
-    recs.push("Immediate field inspection recommended. Consider consulting a local agricultural extension officer.");
+    recs.push("Immediate field inspection recommended. Contact your local agricultural extension officer for expert diagnosis.");
   }
 
   if (recs.length === 0) {
-    recs.push("Crop is in good condition. Continue current irrigation and fertilization schedule.");
-    recs.push("Monitor weekly for any signs of disease or pest activity.");
+    recs.push("All soil and climate parameters are within optimal range. Maintain current irrigation and fertilization schedule.");
+    recs.push("Monitor weekly for early signs of pest or disease activity.");
   }
 
   return recs.slice(0, 6);
 }
 
+// ─── Main analysis entry point ────────────────────────────────────────────────
 export function runAIAnalysis(
   providedCropType: string | null | undefined,
   imageUrl: string | null | undefined,
   soil: SoilInput,
   climate: ClimateInput
 ): AnalysisResult {
-  logger.info({ providedCropType, imageUrl }, "Running AI crop analysis");
+  logger.info({ providedCropType }, "Running deterministic AI crop analysis");
 
-  const cropType: CropType = (CROPS.includes(providedCropType as CropType) ? providedCropType : pickRandom(CROPS)) as CropType;
-  const growthStage = pickRandom(GROWTH_STAGES);
+  const cropType: CropType = (CROPS.includes(providedCropType as CropType)
+    ? providedCropType
+    : "Mango") as CropType;
+
+  // Seeded RNG — same inputs always produce the same sequence
+  const seed = hashInputs(soil, climate, cropType);
+  const rng = makeRng(seed);
+
   const healthScore = computeHealthScore(soil, climate, cropType);
+  const confidence = computeConfidence(soil, climate);
 
   let healthStatus: string;
   if (healthScore >= 0.85) healthStatus = "Excellent";
@@ -192,19 +498,18 @@ export function runAIAnalysis(
   else if (healthScore >= 0.35) healthStatus = "Poor";
   else healthStatus = "Critical";
 
-  const diseaseList = DISEASES[cropType];
-  const diseaseRaw = healthScore < 0.6 ? pickRandom(diseaseList.filter(d => d !== "None Detected")) : Math.random() < 0.2 ? pickRandom(diseaseList) : "None Detected";
-  const diseaseDetected = diseaseRaw === "None Detected" ? null : diseaseRaw;
+  const growthStage = inferGrowthStage(soil, climate, cropType, rng);
 
-  const deficiencyRaw = healthScore < 0.65 && Math.random() < 0.6 ? pickRandom(DEFICIENCIES.filter(d => d !== "None Detected")) : "None Detected";
-  const nutrientDeficiency = deficiencyRaw === "None Detected" ? null : deficiencyRaw;
+  const diseaseDetected = detectDisease(cropType, healthScore, climate, rng);
+  const nutrientDeficiency = detectNutrientDeficiency(soil, cropType, rng);
 
-  const [yieldMin, yieldMax] = YIELD_RANGES[cropType];
-  const yieldModifier = healthScore * 0.7 + 0.3;
-  const yieldPredictionKg = Math.round(randomInRange(yieldMin * yieldModifier * 0.8, yieldMax * yieldModifier));
+  const yieldPredictionKg = computeYield(cropType, healthScore, growthStage, soil, climate);
 
   const harvestDayRange = HARVEST_DAYS[cropType][growthStage] ?? [60, 120];
-  const harvestDaysRemaining = Math.round(randomInRange(harvestDayRange[0], harvestDayRange[1]));
+  // Deterministic: use midpoint of range scaled by health
+  const harvestDaysRemaining = Math.round(
+    harvestDayRange[1] - (harvestDayRange[1] - harvestDayRange[0]) * healthScore
+  );
 
   const harvestDate = new Date();
   harvestDate.setDate(harvestDate.getDate() + harvestDaysRemaining);
@@ -212,20 +517,29 @@ export function runAIAnalysis(
   windowEnd.setDate(windowEnd.getDate() + 14);
   const harvestWindow = `${harvestDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })} – ${windowEnd.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`;
 
-  const confidence = Math.round((0.72 + Math.random() * 0.25) * 100) / 100;
-
+  // Build analysis notes with actual measured values
   const notes: string[] = [
-    `AI identified crop as ${cropType} at ${growthStage} stage with ${Math.round(confidence * 100)}% confidence.`,
-    `Overall health score: ${(healthScore * 100).toFixed(0)}/100 — rated as "${healthStatus}".`,
+    `${cropType} identified at ${growthStage} stage with ${Math.round(confidence * 100)}% model confidence.`,
+    `Overall health score: ${(healthScore * 100).toFixed(0)}/100 — rated "${healthStatus}".`,
   ];
+  if (soil.phLevel != null) {
+    const [lo, hi] = IDEAL_PH[cropType];
+    const inRange = soil.phLevel >= lo && soil.phLevel <= hi;
+    notes.push(`Soil pH: ${soil.phLevel} — ${inRange ? "within optimal range" : `outside optimal range (${lo}–${hi}); corrective action advised`}.`);
+  }
+  if (soil.nitrogenPpm != null) notes.push(`Nitrogen: ${soil.nitrogenPpm} ppm (ideal ${IDEAL_NITROGEN[cropType][0]}–${IDEAL_NITROGEN[cropType][1]} ppm).`);
+  if (soil.phosphorusPpm != null) notes.push(`Phosphorus: ${soil.phosphorusPpm} ppm (ideal ${IDEAL_PHOSPHORUS[cropType][0]}–${IDEAL_PHOSPHORUS[cropType][1]} ppm).`);
+  if (soil.potassiumPpm != null) notes.push(`Potassium: ${soil.potassiumPpm} ppm (ideal ${IDEAL_POTASSIUM[cropType][0]}–${IDEAL_POTASSIUM[cropType][1]} ppm).`);
+  if (climate.temperatureCelsius != null) notes.push(`Temperature: ${climate.temperatureCelsius}°C | Humidity: ${climate.humidityPercent ?? "—"}%.`);
+  if (climate.rainfallMm != null) notes.push(`Rainfall: ${climate.rainfallMm} mm.`);
   if (diseaseDetected) notes.push(`Disease detected: ${diseaseDetected}. Prompt treatment is recommended.`);
-  if (nutrientDeficiency) notes.push(`Nutrient concern: ${nutrientDeficiency} observed in leaf morphology.`);
-  if (soil.phLevel != null) notes.push(`Soil pH: ${soil.phLevel} — ${soil.phLevel >= 5.5 && soil.phLevel <= 7.5 ? "within optimal range" : "outside optimal range, corrective action advised"}.`);
-  if (climate.temperatureCelsius != null) notes.push(`Current temperature: ${climate.temperatureCelsius}°C.`);
+  if (nutrientDeficiency) notes.push(`Nutrient concern: ${nutrientDeficiency} detected from soil readings.`);
 
   const analysisNotes = notes.join(" ");
 
-  const recommendations = generateRecommendations(cropType, growthStage, healthStatus, diseaseDetected, nutrientDeficiency, soil, climate);
+  const recommendations = generateRecommendations(
+    cropType, growthStage, healthStatus, diseaseDetected, nutrientDeficiency, soil, climate
+  );
 
   return {
     cropType,
@@ -242,6 +556,7 @@ export function runAIAnalysis(
   };
 }
 
+// ─── Chat knowledge base ──────────────────────────────────────────────────────
 const CROP_KNOWLEDGE: Record<string, string[]> = {
   irrigation: [
     "For Mango: Irrigate every 7-10 days during dry season; reduce near harvest.",
@@ -296,15 +611,15 @@ export function generateChatResponse(message: string, cropType?: string | null):
   else if (lowerMsg.includes("disease") || lowerMsg.includes("fungus") || lowerMsg.includes("blight") || lowerMsg.includes("rot") || lowerMsg.includes("spot")) category = "disease";
 
   const categoryTips = CROP_KNOWLEDGE[category];
-  let selectedTip = pickRandom(categoryTips);
+  let selectedTip = categoryTips[0];
 
   if (cropType && CROPS.includes(cropType as CropType)) {
     const cropSpecific = categoryTips.filter(t => t.toLowerCase().includes(cropType.toLowerCase()));
-    if (cropSpecific.length > 0) selectedTip = pickRandom(cropSpecific);
+    if (cropSpecific.length > 0) selectedTip = cropSpecific[0];
   }
 
-  const greetings = ["Great question!", "Good to know you're thinking about this.", "Here's what the data suggests:", "Based on best agricultural practices:"];
-  const prefix = pickRandom(greetings);
+  const prefixes = ["Here's what the data suggests:", "Based on best agricultural practices:", "Good to know you're thinking about this.", "Here is the guidance for your crop:"];
+  const prefix = prefixes[Math.floor(Math.abs(message.length % prefixes.length))];
 
   const reply = `${prefix} ${selectedTip}`;
 
