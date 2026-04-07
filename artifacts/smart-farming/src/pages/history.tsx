@@ -1,23 +1,53 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
-import { useListCropScans, getListCropScansQueryKey } from "@workspace/api-client-react";
+import { useListCropScans, useDeleteCropScan, getListCropScansQueryKey, getGetDashboardSummaryQueryKey, getGetRecentScansQueryKey, getGetCropStatsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Search, ArrowRight, Activity, Leaf } from "lucide-react";
+import { Search, ArrowRight, Leaf, Trash2, Loader2 } from "lucide-react";
 
 export default function History() {
   const [filter, setFilter] = useState("");
+  const [isClearing, setIsClearing] = useState(false);
+  const queryClient = useQueryClient();
   
   const { data: scans, isLoading } = useListCropScans({}, {
     query: {
       queryKey: getListCropScansQueryKey({})
     }
   });
+
+  const deleteScan = useDeleteCropScan();
+
+  const handleClearHistory = async () => {
+    if (!scans || scans.length === 0) return;
+    setIsClearing(true);
+    try {
+      await Promise.all(scans.map((s) => deleteScan.mutateAsync({ id: s.id })));
+      await queryClient.invalidateQueries({ queryKey: getListCropScansQueryKey({}) });
+      await queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetRecentScansQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getGetCropStatsQueryKey() });
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   const filteredScans = scans?.filter(s => 
     !filter || s.cropType?.toLowerCase().includes(filter.toLowerCase())
@@ -31,14 +61,47 @@ export default function History() {
             <h1 className="text-3xl font-bold tracking-tight">Scan History</h1>
             <p className="text-muted-foreground mt-1">Review all your past crop analysis records.</p>
           </div>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Filter by crop type..." 
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="pl-9"
-            />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                placeholder="Filter by crop type..." 
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            {scans && scans.length > 0 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive" disabled={isClearing}>
+                    {isClearing ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 mr-2" />
+                    )}
+                    Clear History
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear all scan history?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete all {scans.length} scan record{scans.length !== 1 ? "s" : ""} including their analysis data, soil readings, and climate logs. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleClearHistory}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Yes, clear history
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </div>
 
