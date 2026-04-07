@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   useCreateClimateData,
   useAnalyzeCropScan
 } from "@workspace/api-client-react";
-import { Loader2, ArrowRight, CheckCircle2, Brain } from "lucide-react";
+import { Loader2, ArrowRight, CheckCircle2, Brain, UploadCloud, X, ImageIcon } from "lucide-react";
 
 export default function ScanWizard() {
   const [, setLocation] = useLocation();
@@ -22,6 +22,38 @@ export default function ScanWizard() {
   // Form states
   const [cropType, setCropType] = useState<string>("");
   const [imageUrl, setImageUrl] = useState<string>("");
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = useCallback((file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setImagePreview(dataUrl);
+      setImageUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleFileDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  }, [handleFileSelect]);
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(file);
+  };
+
+  const clearImage = () => {
+    setImagePreview("");
+    setImageUrl("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
   
   const [soilData, setSoilData] = useState({
     phLevel: "", moisturePercent: "", nitrogenPpm: "", phosphorusPpm: "", potassiumPpm: ""
@@ -143,12 +175,59 @@ export default function ScanWizard() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Image URL (Optional)</Label>
-                <Input 
-                  placeholder="https://example.com/crop.jpg" 
-                  value={imageUrl} 
-                  onChange={(e) => setImageUrl(e.target.value)} 
+                <Label>Crop Image (Optional)</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileInputChange}
+                  data-testid="input-crop-image"
                 />
+                {imagePreview ? (
+                  <div className="relative rounded-lg overflow-hidden border border-border aspect-video w-full">
+                    <img
+                      src={imagePreview}
+                      alt="Crop preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                      data-testid="button-clear-image"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={handleFileDrop}
+                    className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed cursor-pointer transition-colors py-10 px-4 ${
+                      isDragOver
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-primary/50 hover:bg-muted/50"
+                    }`}
+                    data-testid="button-upload-image"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                      {isDragOver ? (
+                        <ImageIcon className="w-6 h-6 text-primary" />
+                      ) : (
+                        <UploadCloud className="w-6 h-6 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium">
+                        {isDragOver ? "Drop image here" : "Click to upload or drag and drop"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WEBP up to 10MB</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
             <CardFooter className="justify-end">
