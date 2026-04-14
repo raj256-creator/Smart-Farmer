@@ -5,6 +5,17 @@
  * AI Smart Farming API
  * OpenAPI spec version: 0.1.0
  */
+export interface DetectCropImageBody {
+  imageUrl: string;
+}
+
+export interface CropDetectionResult {
+  /** @nullable */
+  cropType: string | null;
+  confidence: number;
+  message: string;
+}
+
 export interface HealthStatus {
   status: string;
 }

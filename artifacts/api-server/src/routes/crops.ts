@@ -7,8 +7,10 @@ import {
   GetCropScanParams,
   DeleteCropScanParams,
   AnalyzeCropScanParams,
+  DetectCropFromImageBody,
 } from "@workspace/api-zod";
 import { runAIAnalysis } from "../lib/aiAnalysis";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
@@ -87,6 +89,58 @@ router.delete("/crops/:id", async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
+});
+
+router.post("/crops/detect-image", async (req, res): Promise<void> => {
+  const body = DetectCropFromImageBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const { imageUrl } = body.data;
+  const CROPS = ["Mango", "Dragon Fruit", "Chikoo", "Pomegranate", "Mulberry"];
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      max_completion_tokens: 256,
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert crop identification AI. You can only identify these five crops: Mango, Dragon Fruit, Chikoo, Pomegranate, Mulberry.
+
+Analyze the image and respond ONLY with a JSON object in this format (no extra text):
+{"cropType": "Mango", "confidence": 0.94, "message": "Clear mango leaves and fruit clusters detected."}
+
+If the image does not clearly show one of the five crops, set cropType to null and confidence to 0.
+confidence must be a decimal between 0.0 and 1.0.`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "What crop is shown in this image? Choose only from: Mango, Dragon Fruit, Chikoo, Pomegranate, Mulberry." },
+            { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
+          ],
+        },
+      ],
+    });
+
+    const raw = response.choices[0]?.message?.content ?? "{}";
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    let result: { cropType: string | null; confidence: number; message: string };
+
+    try {
+      result = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
+      if (!CROPS.includes(result.cropType ?? "")) result.cropType = null;
+    } catch {
+      result = { cropType: null, confidence: 0, message: "Could not identify crop from image." };
+    }
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ cropType: null, confidence: 0, message: "Image detection failed. Please select crop type manually." });
+  }
 });
 
 router.post("/crops/:id/analyze", async (req, res): Promise<void> => {

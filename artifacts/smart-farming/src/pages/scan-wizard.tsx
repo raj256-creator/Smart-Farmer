@@ -6,13 +6,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { 
   useCreateCropScan, 
   useCreateSoilData, 
   useCreateClimateData,
-  useAnalyzeCropScan
+  useAnalyzeCropScan,
+  useDetectCropFromImage,
 } from "@workspace/api-client-react";
-import { Loader2, ArrowRight, CheckCircle2, Brain, UploadCloud, X, ImageIcon } from "lucide-react";
+import { Loader2, ArrowRight, CheckCircle2, Brain, UploadCloud, X, ImageIcon, ScanSearch, AlertCircle } from "lucide-react";
+
+const CROP_OPTIONS = [
+  "Mango",
+  "Dragon Fruit",
+  "Chikoo",
+  "Pomegranate",
+  "Mulberry",
+] as const;
 
 export default function ScanWizard() {
   const [, setLocation] = useLocation();
@@ -27,16 +37,52 @@ export default function ScanWizard() {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = useCallback((file: File) => {
+  // Detection states
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [detectedCrop, setDetectedCrop] = useState<string | null>(null);
+  const [detectionConfidence, setDetectionConfidence] = useState<number>(0);
+  const [detectionMessage, setDetectionMessage] = useState<string>("");
+  const [detectionStatus, setDetectionStatus] = useState<"idle" | "detecting" | "confirmed" | "rejected" | "failed">("idle");
+  const [showManualSelect, setShowManualSelect] = useState(false);
+
+  const detectCrop = useDetectCropFromImage();
+
+  const handleFileSelect = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) return;
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
       setImagePreview(dataUrl);
       setImageUrl(dataUrl);
+
+      // Reset detection state and trigger auto-detect
+      setDetectionStatus("detecting");
+      setDetectedCrop(null);
+      setCropType("");
+      setShowManualSelect(false);
+      setIsDetecting(true);
+      try {
+        const result = await detectCrop.mutateAsync({ data: { imageUrl: dataUrl } });
+        setDetectionMessage(result.message ?? "");
+        if (result.cropType && result.confidence >= 0.6) {
+          setDetectedCrop(result.cropType);
+          setDetectionConfidence(result.confidence);
+          setDetectionStatus("idle"); // waiting for user to confirm
+        } else {
+          setDetectedCrop(null);
+          setDetectionStatus("failed");
+          setShowManualSelect(true);
+        }
+      } catch {
+        setDetectionStatus("failed");
+        setDetectionMessage("Detection failed. Please select the crop type manually.");
+        setShowManualSelect(true);
+      } finally {
+        setIsDetecting(false);
+      }
     };
     reader.readAsDataURL(file);
-  }, []);
+  }, [detectCrop]);
 
   const handleFileDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -53,7 +99,26 @@ export default function ScanWizard() {
   const clearImage = () => {
     setImagePreview("");
     setImageUrl("");
+    setDetectedCrop(null);
+    setDetectionStatus("idle");
+    setDetectionMessage("");
+    setShowManualSelect(false);
+    setCropType("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const confirmDetection = () => {
+    if (detectedCrop) {
+      setCropType(detectedCrop);
+      setDetectionStatus("confirmed");
+      setShowManualSelect(false);
+    }
+  };
+
+  const rejectDetection = () => {
+    setDetectionStatus("rejected");
+    setShowManualSelect(true);
+    setCropType("");
   };
   
   const [soilData, setSoilData] = useState({
@@ -184,26 +249,13 @@ export default function ScanWizard() {
           <Card>
             <CardHeader>
               <CardTitle>Crop Details</CardTitle>
-              <CardDescription>Select the crop you want to analyze and provide an image.</CardDescription>
+              <CardDescription>Upload a photo and the AI will identify your crop automatically. You can confirm or correct the result.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-5">
+
+              {/* ── Image Upload ── */}
               <div className="space-y-2">
-                <Label>Crop Type *</Label>
-                <Select value={cropType} onValueChange={setCropType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a crop" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Mango">Mango</SelectItem>
-                    <SelectItem value="Dragon Fruit">Dragon Fruit</SelectItem>
-                    <SelectItem value="Chikoo">Chikoo (Sapota)</SelectItem>
-                    <SelectItem value="Pomegranate">Pomegranate</SelectItem>
-                    <SelectItem value="Mulberry">Mulberry</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Crop Image (Optional)</Label>
+                <Label>Crop Image <span className="text-muted-foreground font-normal">(recommended for auto-detection)</span></Label>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -213,16 +265,24 @@ export default function ScanWizard() {
                   data-testid="input-crop-image"
                 />
                 {imagePreview ? (
-                  <div className="relative rounded-lg overflow-hidden border border-border aspect-video w-full">
+                  <div className="relative rounded-lg overflow-hidden border border-border aspect-video w-full bg-muted">
                     <img
                       src={imagePreview}
                       alt="Crop preview"
                       className="w-full h-full object-cover"
                     />
+                    {/* Detecting overlay */}
+                    {isDetecting && (
+                      <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2 text-white">
+                        <ScanSearch className="w-8 h-8 animate-pulse" />
+                        <p className="text-sm font-medium">Detecting crop...</p>
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={clearImage}
-                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                      disabled={isDetecting}
+                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors disabled:opacity-50"
                       data-testid="button-clear-image"
                     >
                       <X className="w-4 h-4" />
@@ -242,24 +302,89 @@ export default function ScanWizard() {
                     data-testid="button-upload-image"
                   >
                     <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-                      {isDragOver ? (
-                        <ImageIcon className="w-6 h-6 text-primary" />
-                      ) : (
-                        <UploadCloud className="w-6 h-6 text-muted-foreground" />
-                      )}
+                      {isDragOver ? <ImageIcon className="w-6 h-6 text-primary" /> : <UploadCloud className="w-6 h-6 text-muted-foreground" />}
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-medium">
-                        {isDragOver ? "Drop image here" : "Click to upload or drag and drop"}
-                      </p>
+                      <p className="text-sm font-medium">{isDragOver ? "Drop image here" : "Click to upload or drag and drop"}</p>
                       <p className="text-xs text-muted-foreground mt-1">PNG, JPG, WEBP up to 10MB</p>
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* ── Detection Result ── */}
+              {imagePreview && !isDetecting && detectedCrop && detectionStatus !== "confirmed" && detectionStatus !== "rejected" && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">Crop Detected</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-lg font-bold text-primary">{detectedCrop}</span>
+                        <Badge variant="secondary" className="text-xs">{Math.round(detectionConfidence * 100)}% confidence</Badge>
+                      </div>
+                      {detectionMessage && <p className="text-xs text-muted-foreground mt-1">{detectionMessage}</p>}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" onClick={confirmDetection} className="flex-1 sm:flex-none">
+                      <CheckCircle2 className="w-4 h-4 mr-1.5" />
+                      Yes, this is {detectedCrop}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={rejectDetection} className="flex-1 sm:flex-none">
+                      Not correct — select manually
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Detection Confirmed badge ── */}
+              {detectionStatus === "confirmed" && (
+                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 p-3 flex items-center gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-green-700 dark:text-green-400">Crop confirmed: {cropType}</p>
+                    <button type="button" onClick={rejectDetection} className="text-xs text-muted-foreground underline mt-0.5 hover:text-foreground">
+                      Change selection
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Detection Failed notice ── */}
+              {detectionStatus === "failed" && imagePreview && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Could not identify crop automatically</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{detectionMessage || "Please select the crop type below."}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Manual Crop Select ── */}
+              {(showManualSelect || !imagePreview) && (
+                <div className="space-y-2">
+                  <Label>
+                    Crop Type <span className="text-destructive">*</span>
+                    {!imagePreview && <span className="text-muted-foreground font-normal ml-1">(or upload an image for auto-detection)</span>}
+                  </Label>
+                  <Select value={cropType} onValueChange={(v) => { setCropType(v); setDetectionStatus("rejected"); }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a crop" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CROP_OPTIONS.map((c) => (
+                        <SelectItem key={c} value={c}>{c === "Chikoo" ? "Chikoo (Sapota)" : c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
             </CardContent>
             <CardFooter className="justify-end">
-              <Button onClick={handleStep1} disabled={!cropType || isPending} className="w-full sm:w-auto" data-testid="button-step1-next">
+              <Button onClick={handleStep1} disabled={!cropType || isPending || isDetecting} className="w-full sm:w-auto" data-testid="button-step1-next">
                 {isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Next Step <ArrowRight className="w-4 h-4 ml-2" />
               </Button>

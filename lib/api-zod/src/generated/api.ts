@@ -51,6 +51,19 @@ export const CreateCropScanBody = zod.object({
 });
 
 /**
+ * @summary Detect crop type from an uploaded image using AI vision
+ */
+export const DetectCropFromImageBody = zod.object({
+  imageUrl: zod.string(),
+});
+
+export const DetectCropFromImageResponse = zod.object({
+  cropType: zod.string().nullable(),
+  confidence: zod.number(),
+  message: zod.string(),
+});
+
+/**
  * @summary Get a specific crop scan
  */
 export const GetCropScanParams = zod.object({

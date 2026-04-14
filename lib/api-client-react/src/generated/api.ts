@@ -24,9 +24,11 @@ import type {
   CreateCropScanBody,
   CreateSoilDataBody,
   CropAnalysis,
+  CropDetectionResult,
   CropScan,
   CropStatItem,
   DashboardSummary,
+  DetectCropImageBody,
   HealthStatus,
   ListClimateRecordsParams,
   ListCropScansParams,
@@ -298,6 +300,92 @@ export const useCreateCropScan = <
   TContext
 > => {
   return useMutation(getCreateCropScanMutationOptions(options));
+};
+
+/**
+ * @summary Detect crop type from an uploaded image using AI vision
+ */
+export const getDetectCropFromImageUrl = () => {
+  return `/api/crops/detect-image`;
+};
+
+export const detectCropFromImage = async (
+  detectCropImageBody: DetectCropImageBody,
+  options?: RequestInit,
+): Promise<CropDetectionResult> => {
+  return customFetch<CropDetectionResult>(getDetectCropFromImageUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(detectCropImageBody),
+  });
+};
+
+export const getDetectCropFromImageMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof detectCropFromImage>>,
+    TError,
+    { data: BodyType<DetectCropImageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof detectCropFromImage>>,
+  TError,
+  { data: BodyType<DetectCropImageBody> },
+  TContext
+> => {
+  const mutationKey = ["detectCropFromImage"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof detectCropFromImage>>,
+    { data: BodyType<DetectCropImageBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return detectCropFromImage(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DetectCropFromImageMutationResult = NonNullable<
+  Awaited<ReturnType<typeof detectCropFromImage>>
+>;
+export type DetectCropFromImageMutationBody = BodyType<DetectCropImageBody>;
+export type DetectCropFromImageMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Detect crop type from an uploaded image using AI vision
+ */
+export const useDetectCropFromImage = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof detectCropFromImage>>,
+    TError,
+    { data: BodyType<DetectCropImageBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof detectCropFromImage>>,
+  TError,
+  { data: BodyType<DetectCropImageBody> },
+  TContext
+> => {
+  return useMutation(getDetectCropFromImageMutationOptions(options));
 };
 
 /**

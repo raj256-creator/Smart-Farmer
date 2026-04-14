@@ -80,6 +80,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/CropScan"
 
+  /crops/detect-image:
+    post:
+      operationId: detectCropFromImage
+      tags: [crops]
+      summary: Detect crop type from an uploaded image using AI vision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DetectCropImageBody"
+      responses:
+        "200":
+          description: Detected crop type and confidence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CropDetectionResult"
+
   /crops/{id}:
     get:
       operationId: getCropScan
@@ -291,6 +310,24 @@ paths:
 
 components:
   schemas:
+    DetectCropImageBody:
+      type: object
+      required: [imageUrl]
+      properties:
+        imageUrl:
+          type: string
+
+    CropDetectionResult:
+      type: object
+      required: [cropType, confidence, message]
+      properties:
+        cropType:
+          type: ["string", "null"]
+        confidence:
+          type: number
+        message:
+          type: string
+
     HealthStatus:
       type: object
       properties:
