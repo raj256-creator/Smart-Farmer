@@ -25,12 +25,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
               <div
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors cursor-pointer shrink-0 whitespace-nowrap",
-                  location === item.href || (location.startsWith("/scan/") && item.href === "/scan/new" && location !== "/scan/new" && false)
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
-                )}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap text-muted-foreground hover:bg-secondary hover:text-secondary-foreground font-bold"
               >
                 <item.icon className="w-5 h-5" />
                 {item.label}
