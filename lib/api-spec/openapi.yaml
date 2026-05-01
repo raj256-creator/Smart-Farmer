@@ -356,6 +356,156 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChatResponse"
 
+  /farms:
+    get:
+      operationId: listFarms
+      tags: [farms]
+      summary: List all farms
+      responses:
+        "200":
+          description: List of farms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Farm"
+    post:
+      operationId: createFarm
+      tags: [farms]
+      summary: Create a new farm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFarmBody"
+      responses:
+        "201":
+          description: Created farm
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Farm"
+
+  /farms/{id}:
+    get:
+      operationId: getFarm
+      tags: [farms]
+      summary: Get a farm by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Farm details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Farm"
+    put:
+      operationId: updateFarm
+      tags: [farms]
+      summary: Update a farm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFarmBody"
+      responses:
+        "200":
+          description: Updated farm
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Farm"
+    delete:
+      operationId: deleteFarm
+      tags: [farms]
+      summary: Delete a farm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /farms/{id}/dashboard:
+    get:
+      operationId: getFarmDashboard
+      tags: [farms]
+      summary: Get AI-powered dashboard data for a farm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Farm dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FarmDashboard"
+
+  /farms/{id}/analytics:
+    get:
+      operationId: getFarmAnalytics
+      tags: [farms]
+      summary: Get AI analytics for a farm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Farm analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FarmAnalytics"
+
+  /farms/{id}/yield-optimization:
+    post:
+      operationId: optimizeFarmYield
+      tags: [farms]
+      summary: Calculate optimal yield for given land area and crops
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/YieldOptimizationBody"
+      responses:
+        "200":
+          description: Yield optimization result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/YieldOptimizationResult"
+
   /dashboard/summary:
     get:
       operationId: getDashboardSummary
@@ -747,3 +897,348 @@ components:
           type: ["string", "null"]
       required:
         - message
+
+    Farm:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        location:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+        acreage:
+          type: ["string", "null"]
+        crops:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - location
+        - status
+        - createdAt
+        - updatedAt
+
+    CreateFarmBody:
+      type: object
+      properties:
+        name:
+          type: string
+        location:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+        acreage:
+          type: ["string", "null"]
+        crops:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - location
+
+    UpdateFarmBody:
+      type: object
+      properties:
+        name:
+          type: string
+        location:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+        acreage:
+          type: ["string", "null"]
+        crops:
+          type: array
+          items:
+            type: string
+
+    FarmDashboard:
+      type: object
+      properties:
+        farm:
+          $ref: "#/components/schemas/Farm"
+        healthScore:
+          type: integer
+        cropHealthMap:
+          type: array
+          items:
+            type: object
+            properties:
+              crop:
+                type: string
+              health:
+                type: string
+              score:
+                type: integer
+            required:
+              - crop
+              - health
+              - score
+        weatherInsights:
+          type: object
+          properties:
+            temperature:
+              type: string
+            humidity:
+              type: string
+            rainfall:
+              type: string
+            advisory:
+              type: string
+          required:
+            - temperature
+            - humidity
+            - rainfall
+            - advisory
+        soilInsights:
+          type: object
+          properties:
+            ph:
+              type: string
+            nitrogen:
+              type: string
+            phosphorus:
+              type: string
+            potassium:
+              type: string
+            advisory:
+              type: string
+          required:
+            - ph
+            - nitrogen
+            - phosphorus
+            - potassium
+            - advisory
+        recentAlerts:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              message:
+                type: string
+              severity:
+                type: string
+            required:
+              - type
+              - message
+              - severity
+        performanceTrend:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              yield:
+                type: number
+              health:
+                type: integer
+            required:
+              - month
+              - yield
+              - health
+        aiInsights:
+          type: string
+      required:
+        - farm
+        - healthScore
+        - cropHealthMap
+        - weatherInsights
+        - soilInsights
+        - recentAlerts
+        - performanceTrend
+        - aiInsights
+
+    FarmAnalytics:
+      type: object
+      properties:
+        yieldPrediction:
+          type: object
+          properties:
+            totalEstimatedKg:
+              type: number
+            bycrops:
+              type: array
+              items:
+                type: object
+                properties:
+                  crop:
+                    type: string
+                  estimatedKg:
+                    type: number
+                  confidence:
+                    type: string
+                required:
+                  - crop
+                  - estimatedKg
+                  - confidence
+            seasonalOutlook:
+              type: string
+          required:
+            - totalEstimatedKg
+            - bycrops
+            - seasonalOutlook
+        riskAlerts:
+          type: array
+          items:
+            type: object
+            properties:
+              risk:
+                type: string
+              level:
+                type: string
+              description:
+                type: string
+              action:
+                type: string
+            required:
+              - risk
+              - level
+              - description
+              - action
+        cropComparison:
+          type: array
+          items:
+            type: object
+            properties:
+              crop:
+                type: string
+              profitabilityScore:
+                type: integer
+              marketDemand:
+                type: string
+              avgYieldKgPerAcre:
+                type: number
+              estimatedRevenuePerAcre:
+                type: number
+            required:
+              - crop
+              - profitabilityScore
+              - marketDemand
+              - avgYieldKgPerAcre
+              - estimatedRevenuePerAcre
+        trendData:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+              yield:
+                type: number
+              rainfall:
+                type: number
+              healthScore:
+                type: integer
+            required:
+              - month
+              - yield
+              - rainfall
+              - healthScore
+        aiRecommendations:
+          type: string
+      required:
+        - yieldPrediction
+        - riskAlerts
+        - cropComparison
+        - trendData
+        - aiRecommendations
+
+    YieldOptimizationBody:
+      type: object
+      properties:
+        acreage:
+          type: number
+        selectedCrops:
+          type: array
+          items:
+            type: string
+        spacingPreference:
+          type: string
+      required:
+        - acreage
+        - selectedCrops
+
+    YieldOptimizationResult:
+      type: object
+      properties:
+        totalPlants:
+          type: integer
+        totalEstimatedYieldKg:
+          type: number
+        estimatedRevenueInr:
+          type: number
+        cropBreakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              crop:
+                type: string
+              allocatedAcres:
+                type: number
+              plantsPerAcre:
+                type: integer
+              totalPlants:
+                type: integer
+              yieldKgPerPlant:
+                type: number
+              totalYieldKg:
+                type: number
+              revenueInr:
+                type: number
+              spacing:
+                type: string
+            required:
+              - crop
+              - allocatedAcres
+              - plantsPerAcre
+              - totalPlants
+              - yieldKgPerPlant
+              - totalYieldKg
+              - revenueInr
+              - spacing
+        optimizationSuggestions:
+          type: array
+          items:
+            type: string
+        optimalDistribution:
+          type: array
+          items:
+            type: object
+            properties:
+              crop:
+                type: string
+              percentage:
+                type: number
+              reasoning:
+                type: string
+            required:
+              - crop
+              - percentage
+              - reasoning
+      required:
+        - totalPlants
+        - totalEstimatedYieldKg
+        - estimatedRevenueInr
+        - cropBreakdown
+        - optimizationSuggestions
+        - optimalDistribution

@@ -1,16 +1,22 @@
 import { Link, useLocation } from "wouter";
-import { Leaf, LayoutDashboard, Scan, History, MessageSquare } from "lucide-react";
+import { Leaf, LayoutDashboard, Scan, History, MessageSquare, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
 
   const navItems = [
+    { href: "/", label: "My Farms", icon: Home },
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/scan/new", label: "New Scan", icon: Scan },
     { href: "/history", label: "History", icon: History },
     { href: "/chat", label: "AI Assistant", icon: MessageSquare },
   ];
+
+  const isActive = (href: string) => {
+    if (href === "/") return location === "/" || location.startsWith("/farms");
+    return location.startsWith(href);
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -25,7 +31,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
               <div
-                className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap text-muted-foreground hover:bg-secondary hover:text-secondary-foreground font-bold"
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer shrink-0 whitespace-nowrap font-medium",
+                  isActive(item.href)
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-secondary-foreground"
+                )}
               >
                 <item.icon className="w-5 h-5" />
                 {item.label}

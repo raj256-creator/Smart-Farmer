@@ -10,6 +10,9 @@ import ScanWizard from "@/pages/scan-wizard";
 import ScanDetail from "@/pages/scan-detail";
 import History from "@/pages/history";
 import Chat from "@/pages/chat";
+import FarmDashboard from "@/pages/farm-dashboard";
+import FarmAnalytics from "@/pages/farm-analytics";
+import FarmYield from "@/pages/farm-yield";
 
 const queryClient = new QueryClient();
 
@@ -17,6 +20,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/farms/:id" component={FarmDashboard} />
+      <Route path="/farms/:id/analytics" component={FarmAnalytics} />
+      <Route path="/farms/:id/yield" component={FarmYield} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/scan/new" component={ScanWizard} />
       <Route path="/scan/:id" component={ScanDetail} />

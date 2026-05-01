@@ -278,6 +278,231 @@ export const SendConversationMessageResponse = zod.object({
 });
 
 /**
+ * @summary List all farms
+ */
+export const ListFarmsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  location: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.string(),
+  acreage: zod.string().nullish(),
+  crops: zod.array(zod.string()).optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListFarmsResponse = zod.array(ListFarmsResponseItem);
+
+/**
+ * @summary Create a new farm
+ */
+export const CreateFarmBody = zod.object({
+  name: zod.string(),
+  location: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.string().optional(),
+  acreage: zod.string().nullish(),
+  crops: zod.array(zod.string()).optional(),
+});
+
+/**
+ * @summary Get a farm by ID
+ */
+export const GetFarmParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetFarmResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  location: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.string(),
+  acreage: zod.string().nullish(),
+  crops: zod.array(zod.string()).optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update a farm
+ */
+export const UpdateFarmParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateFarmBody = zod.object({
+  name: zod.string().optional(),
+  location: zod.string().optional(),
+  description: zod.string().nullish(),
+  status: zod.string().optional(),
+  acreage: zod.string().nullish(),
+  crops: zod.array(zod.string()).optional(),
+});
+
+export const UpdateFarmResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  location: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.string(),
+  acreage: zod.string().nullish(),
+  crops: zod.array(zod.string()).optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete a farm
+ */
+export const DeleteFarmParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get AI-powered dashboard data for a farm
+ */
+export const GetFarmDashboardParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetFarmDashboardResponse = zod.object({
+  farm: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    location: zod.string(),
+    description: zod.string().nullish(),
+    status: zod.string(),
+    acreage: zod.string().nullish(),
+    crops: zod.array(zod.string()).optional(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+  }),
+  healthScore: zod.number(),
+  cropHealthMap: zod.array(
+    zod.object({
+      crop: zod.string(),
+      health: zod.string(),
+      score: zod.number(),
+    }),
+  ),
+  weatherInsights: zod.object({
+    temperature: zod.string(),
+    humidity: zod.string(),
+    rainfall: zod.string(),
+    advisory: zod.string(),
+  }),
+  soilInsights: zod.object({
+    ph: zod.string(),
+    nitrogen: zod.string(),
+    phosphorus: zod.string(),
+    potassium: zod.string(),
+    advisory: zod.string(),
+  }),
+  recentAlerts: zod.array(
+    zod.object({
+      type: zod.string(),
+      message: zod.string(),
+      severity: zod.string(),
+    }),
+  ),
+  performanceTrend: zod.array(
+    zod.object({
+      month: zod.string(),
+      yield: zod.number(),
+      health: zod.number(),
+    }),
+  ),
+  aiInsights: zod.string(),
+});
+
+/**
+ * @summary Get AI analytics for a farm
+ */
+export const GetFarmAnalyticsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetFarmAnalyticsResponse = zod.object({
+  yieldPrediction: zod.object({
+    totalEstimatedKg: zod.number(),
+    bycrops: zod.array(
+      zod.object({
+        crop: zod.string(),
+        estimatedKg: zod.number(),
+        confidence: zod.string(),
+      }),
+    ),
+    seasonalOutlook: zod.string(),
+  }),
+  riskAlerts: zod.array(
+    zod.object({
+      risk: zod.string(),
+      level: zod.string(),
+      description: zod.string(),
+      action: zod.string(),
+    }),
+  ),
+  cropComparison: zod.array(
+    zod.object({
+      crop: zod.string(),
+      profitabilityScore: zod.number(),
+      marketDemand: zod.string(),
+      avgYieldKgPerAcre: zod.number(),
+      estimatedRevenuePerAcre: zod.number(),
+    }),
+  ),
+  trendData: zod.array(
+    zod.object({
+      month: zod.string(),
+      yield: zod.number(),
+      rainfall: zod.number(),
+      healthScore: zod.number(),
+    }),
+  ),
+  aiRecommendations: zod.string(),
+});
+
+/**
+ * @summary Calculate optimal yield for given land area and crops
+ */
+export const OptimizeFarmYieldParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const OptimizeFarmYieldBody = zod.object({
+  acreage: zod.number(),
+  selectedCrops: zod.array(zod.string()),
+  spacingPreference: zod.string().optional(),
+});
+
+export const OptimizeFarmYieldResponse = zod.object({
+  totalPlants: zod.number(),
+  totalEstimatedYieldKg: zod.number(),
+  estimatedRevenueInr: zod.number(),
+  cropBreakdown: zod.array(
+    zod.object({
+      crop: zod.string(),
+      allocatedAcres: zod.number(),
+      plantsPerAcre: zod.number(),
+      totalPlants: zod.number(),
+      yieldKgPerPlant: zod.number(),
+      totalYieldKg: zod.number(),
+      revenueInr: zod.number(),
+      spacing: zod.string(),
+    }),
+  ),
+  optimizationSuggestions: zod.array(zod.string()),
+  optimalDistribution: zod.array(
+    zod.object({
+      crop: zod.string(),
+      percentage: zod.number(),
+      reasoning: zod.string(),
+    }),
+  ),
+});
+
+/**
  * @summary Get overall dashboard stats and summaries
  */
 export const GetDashboardSummaryResponse = zod.object({

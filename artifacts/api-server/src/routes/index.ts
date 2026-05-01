@@ -6,6 +6,7 @@ import climateRouter from "./climate";
 import recommendationsRouter from "./recommendations";
 import chatRouter from "./chat";
 import conversationsRouter from "./conversations";
+import farmsRouter from "./farms";
 import dashboardRouter from "./dashboard";
 
 const router: IRouter = Router();
@@ -17,6 +18,7 @@ router.use(climateRouter);
 router.use(recommendationsRouter);
 router.use(chatRouter);
 router.use(conversationsRouter);
+router.use(farmsRouter);
 router.use(dashboardRouter);
 
 export default router;

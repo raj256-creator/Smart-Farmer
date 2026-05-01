@@ -25,6 +25,7 @@ import type {
   CreateClimateDataBody,
   CreateConversationBody,
   CreateCropScanBody,
+  CreateFarmBody,
   CreateSoilDataBody,
   CropAnalysis,
   CropDetectionResult,
@@ -32,6 +33,9 @@ import type {
   CropStatItem,
   DashboardSummary,
   DetectCropImageBody,
+  Farm,
+  FarmAnalytics,
+  FarmDashboard,
   HealthStatus,
   ListClimateRecordsParams,
   ListCropScansParams,
@@ -40,6 +44,9 @@ import type {
   Recommendation,
   SendConversationMessageBody,
   SoilData,
+  UpdateFarmBody,
+  YieldOptimizationBody,
+  YieldOptimizationResult,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1616,6 +1623,666 @@ export const useSendConversationMessage = <
   TContext
 > => {
   return useMutation(getSendConversationMessageMutationOptions(options));
+};
+
+/**
+ * @summary List all farms
+ */
+export const getListFarmsUrl = () => {
+  return `/api/farms`;
+};
+
+export const listFarms = async (options?: RequestInit): Promise<Farm[]> => {
+  return customFetch<Farm[]>(getListFarmsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListFarmsQueryKey = () => {
+  return [`/api/farms`] as const;
+};
+
+export const getListFarmsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listFarms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listFarms>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListFarmsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listFarms>>> = ({
+    signal,
+  }) => listFarms({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listFarms>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListFarmsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listFarms>>
+>;
+export type ListFarmsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all farms
+ */
+
+export function useListFarms<
+  TData = Awaited<ReturnType<typeof listFarms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listFarms>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListFarmsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a new farm
+ */
+export const getCreateFarmUrl = () => {
+  return `/api/farms`;
+};
+
+export const createFarm = async (
+  createFarmBody: CreateFarmBody,
+  options?: RequestInit,
+): Promise<Farm> => {
+  return customFetch<Farm>(getCreateFarmUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createFarmBody),
+  });
+};
+
+export const getCreateFarmMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFarm>>,
+    TError,
+    { data: BodyType<CreateFarmBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createFarm>>,
+  TError,
+  { data: BodyType<CreateFarmBody> },
+  TContext
+> => {
+  const mutationKey = ["createFarm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createFarm>>,
+    { data: BodyType<CreateFarmBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createFarm(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateFarmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createFarm>>
+>;
+export type CreateFarmMutationBody = BodyType<CreateFarmBody>;
+export type CreateFarmMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new farm
+ */
+export const useCreateFarm = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createFarm>>,
+    TError,
+    { data: BodyType<CreateFarmBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createFarm>>,
+  TError,
+  { data: BodyType<CreateFarmBody> },
+  TContext
+> => {
+  return useMutation(getCreateFarmMutationOptions(options));
+};
+
+/**
+ * @summary Get a farm by ID
+ */
+export const getGetFarmUrl = (id: number) => {
+  return `/api/farms/${id}`;
+};
+
+export const getFarm = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Farm> => {
+  return customFetch<Farm>(getGetFarmUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFarmQueryKey = (id: number) => {
+  return [`/api/farms/${id}`] as const;
+};
+
+export const getGetFarmQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFarm>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getFarm>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFarmQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFarm>>> = ({
+    signal,
+  }) => getFarm(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof getFarm>>, TError, TData> & {
+    queryKey: QueryKey;
+  };
+};
+
+export type GetFarmQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFarm>>
+>;
+export type GetFarmQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get a farm by ID
+ */
+
+export function useGetFarm<
+  TData = Awaited<ReturnType<typeof getFarm>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof getFarm>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFarmQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a farm
+ */
+export const getUpdateFarmUrl = (id: number) => {
+  return `/api/farms/${id}`;
+};
+
+export const updateFarm = async (
+  id: number,
+  updateFarmBody: UpdateFarmBody,
+  options?: RequestInit,
+): Promise<Farm> => {
+  return customFetch<Farm>(getUpdateFarmUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateFarmBody),
+  });
+};
+
+export const getUpdateFarmMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateFarm>>,
+    TError,
+    { id: number; data: BodyType<UpdateFarmBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateFarm>>,
+  TError,
+  { id: number; data: BodyType<UpdateFarmBody> },
+  TContext
+> => {
+  const mutationKey = ["updateFarm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateFarm>>,
+    { id: number; data: BodyType<UpdateFarmBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateFarm(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateFarmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateFarm>>
+>;
+export type UpdateFarmMutationBody = BodyType<UpdateFarmBody>;
+export type UpdateFarmMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a farm
+ */
+export const useUpdateFarm = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateFarm>>,
+    TError,
+    { id: number; data: BodyType<UpdateFarmBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateFarm>>,
+  TError,
+  { id: number; data: BodyType<UpdateFarmBody> },
+  TContext
+> => {
+  return useMutation(getUpdateFarmMutationOptions(options));
+};
+
+/**
+ * @summary Delete a farm
+ */
+export const getDeleteFarmUrl = (id: number) => {
+  return `/api/farms/${id}`;
+};
+
+export const deleteFarm = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteFarmUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteFarmMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteFarm>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteFarm>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteFarm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteFarm>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteFarm(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteFarmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteFarm>>
+>;
+
+export type DeleteFarmMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a farm
+ */
+export const useDeleteFarm = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteFarm>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteFarm>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteFarmMutationOptions(options));
+};
+
+/**
+ * @summary Get AI-powered dashboard data for a farm
+ */
+export const getGetFarmDashboardUrl = (id: number) => {
+  return `/api/farms/${id}/dashboard`;
+};
+
+export const getFarmDashboard = async (
+  id: number,
+  options?: RequestInit,
+): Promise<FarmDashboard> => {
+  return customFetch<FarmDashboard>(getGetFarmDashboardUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFarmDashboardQueryKey = (id: number) => {
+  return [`/api/farms/${id}/dashboard`] as const;
+};
+
+export const getGetFarmDashboardQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFarmDashboard>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFarmDashboard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFarmDashboardQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFarmDashboard>>
+  > = ({ signal }) => getFarmDashboard(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFarmDashboard>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFarmDashboardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFarmDashboard>>
+>;
+export type GetFarmDashboardQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get AI-powered dashboard data for a farm
+ */
+
+export function useGetFarmDashboard<
+  TData = Awaited<ReturnType<typeof getFarmDashboard>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFarmDashboard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFarmDashboardQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get AI analytics for a farm
+ */
+export const getGetFarmAnalyticsUrl = (id: number) => {
+  return `/api/farms/${id}/analytics`;
+};
+
+export const getFarmAnalytics = async (
+  id: number,
+  options?: RequestInit,
+): Promise<FarmAnalytics> => {
+  return customFetch<FarmAnalytics>(getGetFarmAnalyticsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFarmAnalyticsQueryKey = (id: number) => {
+  return [`/api/farms/${id}/analytics`] as const;
+};
+
+export const getGetFarmAnalyticsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFarmAnalytics>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFarmAnalytics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFarmAnalyticsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFarmAnalytics>>
+  > = ({ signal }) => getFarmAnalytics(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFarmAnalytics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFarmAnalyticsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFarmAnalytics>>
+>;
+export type GetFarmAnalyticsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get AI analytics for a farm
+ */
+
+export function useGetFarmAnalytics<
+  TData = Awaited<ReturnType<typeof getFarmAnalytics>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFarmAnalytics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFarmAnalyticsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Calculate optimal yield for given land area and crops
+ */
+export const getOptimizeFarmYieldUrl = (id: number) => {
+  return `/api/farms/${id}/yield-optimization`;
+};
+
+export const optimizeFarmYield = async (
+  id: number,
+  yieldOptimizationBody: YieldOptimizationBody,
+  options?: RequestInit,
+): Promise<YieldOptimizationResult> => {
+  return customFetch<YieldOptimizationResult>(getOptimizeFarmYieldUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(yieldOptimizationBody),
+  });
+};
+
+export const getOptimizeFarmYieldMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof optimizeFarmYield>>,
+    TError,
+    { id: number; data: BodyType<YieldOptimizationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof optimizeFarmYield>>,
+  TError,
+  { id: number; data: BodyType<YieldOptimizationBody> },
+  TContext
+> => {
+  const mutationKey = ["optimizeFarmYield"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof optimizeFarmYield>>,
+    { id: number; data: BodyType<YieldOptimizationBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return optimizeFarmYield(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type OptimizeFarmYieldMutationResult = NonNullable<
+  Awaited<ReturnType<typeof optimizeFarmYield>>
+>;
+export type OptimizeFarmYieldMutationBody = BodyType<YieldOptimizationBody>;
+export type OptimizeFarmYieldMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Calculate optimal yield for given land area and crops
+ */
+export const useOptimizeFarmYield = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof optimizeFarmYield>>,
+    TError,
+    { id: number; data: BodyType<YieldOptimizationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof optimizeFarmYield>>,
+  TError,
+  { id: number; data: BodyType<YieldOptimizationBody> },
+  TContext
+> => {
+  return useMutation(getOptimizeFarmYieldMutationOptions(options));
 };
 
 /**

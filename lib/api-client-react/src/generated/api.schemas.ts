@@ -201,6 +201,160 @@ export interface SendConversationMessageBody {
   cropType?: string | null;
 }
 
+export interface Farm {
+  id: number;
+  name: string;
+  location: string;
+  /** @nullable */
+  description?: string | null;
+  status: string;
+  /** @nullable */
+  acreage?: string | null;
+  crops?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFarmBody {
+  name: string;
+  location: string;
+  /** @nullable */
+  description?: string | null;
+  status?: string;
+  /** @nullable */
+  acreage?: string | null;
+  crops?: string[];
+}
+
+export interface UpdateFarmBody {
+  name?: string;
+  location?: string;
+  /** @nullable */
+  description?: string | null;
+  status?: string;
+  /** @nullable */
+  acreage?: string | null;
+  crops?: string[];
+}
+
+export type FarmDashboardCropHealthMapItem = {
+  crop: string;
+  health: string;
+  score: number;
+};
+
+export type FarmDashboardWeatherInsights = {
+  temperature: string;
+  humidity: string;
+  rainfall: string;
+  advisory: string;
+};
+
+export type FarmDashboardSoilInsights = {
+  ph: string;
+  nitrogen: string;
+  phosphorus: string;
+  potassium: string;
+  advisory: string;
+};
+
+export type FarmDashboardRecentAlertsItem = {
+  type: string;
+  message: string;
+  severity: string;
+};
+
+export type FarmDashboardPerformanceTrendItem = {
+  month: string;
+  yield: number;
+  health: number;
+};
+
+export interface FarmDashboard {
+  farm: Farm;
+  healthScore: number;
+  cropHealthMap: FarmDashboardCropHealthMapItem[];
+  weatherInsights: FarmDashboardWeatherInsights;
+  soilInsights: FarmDashboardSoilInsights;
+  recentAlerts: FarmDashboardRecentAlertsItem[];
+  performanceTrend: FarmDashboardPerformanceTrendItem[];
+  aiInsights: string;
+}
+
+export type FarmAnalyticsYieldPredictionBycropsItem = {
+  crop: string;
+  estimatedKg: number;
+  confidence: string;
+};
+
+export type FarmAnalyticsYieldPrediction = {
+  totalEstimatedKg: number;
+  bycrops: FarmAnalyticsYieldPredictionBycropsItem[];
+  seasonalOutlook: string;
+};
+
+export type FarmAnalyticsRiskAlertsItem = {
+  risk: string;
+  level: string;
+  description: string;
+  action: string;
+};
+
+export type FarmAnalyticsCropComparisonItem = {
+  crop: string;
+  profitabilityScore: number;
+  marketDemand: string;
+  avgYieldKgPerAcre: number;
+  estimatedRevenuePerAcre: number;
+};
+
+export type FarmAnalyticsTrendDataItem = {
+  month: string;
+  yield: number;
+  rainfall: number;
+  healthScore: number;
+};
+
+export interface FarmAnalytics {
+  yieldPrediction: FarmAnalyticsYieldPrediction;
+  riskAlerts: FarmAnalyticsRiskAlertsItem[];
+  cropComparison: FarmAnalyticsCropComparisonItem[];
+  trendData: FarmAnalyticsTrendDataItem[];
+  aiRecommendations: string;
+}
+
+export interface YieldOptimizationBody {
+  acreage: number;
+  selectedCrops: string[];
+  spacingPreference?: string;
+}
+
+export type YieldOptimizationResultCropBreakdownItem = {
+  crop: string;
+  allocatedAcres: number;
+  plantsPerAcre: number;
+  totalPlants: number;
+  yieldKgPerPlant: number;
+  totalYieldKg: number;
+  revenueInr: number;
+  spacing: string;
+};
+
+export type YieldOptimizationResultOptimalDistributionItem = {
+  crop: string;
+  percentage: number;
+  reasoning: string;
+};
+
+export interface YieldOptimizationResult {
+  totalPlants: number;
+  totalEstimatedYieldKg: number;
+  estimatedRevenueInr: number;
+  cropBreakdown: YieldOptimizationResultCropBreakdownItem[];
+  optimizationSuggestions: string[];
+  optimalDistribution: YieldOptimizationResultOptimalDistributionItem[];
+}
+
 export type ListCropScansParams = {
   cropType?: string;
   limit?: number;

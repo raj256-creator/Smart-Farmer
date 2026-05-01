@@ -33,13 +33,13 @@ React + Vite web app for AI-powered crop monitoring.
 **Supported crops**: Mango, Dragon Fruit, Chikoo (Sapota), Pomegranate, Mulberry
 
 **Features**:
+- Home Page: 5 farm cards with name, location, crops, status, acreage; Add/Edit/Delete/Open Farm
+- Farm Dashboard (`/farms/:id`): AI-generated health score, crop health map, weather/soil insights, alerts, performance trend chart, AI insights panel
+- AI Analytics (`/farms/:id/analytics`): Yield prediction by crop, risk alerts with action items, crop profitability comparison table, 12-month trend graphs, AI recommendations
+- Yield Optimizer (`/farms/:id/yield`): Calculator with acreage + crop + density inputs; outputs plant count, yield, revenue, optimal distribution pie chart, crop breakdown table, planting suggestions
 - Multi-step crop scan wizard with auto crop detection from image (GPT-4o vision)
-- Step 1: Upload photo → AI detects crop → user confirms or corrects; manual dropdown fallback
-- Back navigation and step indicator clickable for visited steps
-- AI crop identification, growth stage detection, disease detection, yield/harvest prediction
-- Smart farming recommendations per scan
 - Persistent conversation-based AI chatbot with full history sidebar
-- Dashboard with charts (crop breakdown, health distribution)
+- Global dashboard with charts (crop breakdown, health distribution)
 - Scan history with Clear All feature
 
 **AI Chatbot (Chat page)**:
@@ -47,10 +47,15 @@ React + Vite web app for AI-powered crop monitoring.
 - Each conversation maintains full message history; AI uses prior context
 - Structured responses: Understanding the Problem, Key Insights, Solution, Prevention Tips, Extra Advice
 - Suggestion chips after each AI reply for quick follow-up questions
-- Conversations auto-created when user sends first message; title = first message text
-- System prompt: detailed agriculture assistant with 7 capabilities (crop guidance, disease/pest support, smart recommendations, context awareness, structured responses, knowledge base, continuous improvement)
+- System prompt: detailed 7-capability agriculture assistant
 
-**Pages**: `/` (home), `/dashboard`, `/scan/new`, `/scan/:id`, `/history`, `/chat`
+**Yield Optimizer logic**:
+- Crop density data per crop (low/medium/high): plants/acre, yield kg/plant, price INR/kg, spacing
+- Crops: Mango (100 plants/acre medium), Dragon Fruit (600), Chikoo (100), Pomegranate (200), Mulberry (1500)
+- Calculates: total plants, total yield kg, estimated revenue INR
+- Optimal distribution ranked by revenue per acre
+
+**Pages**: `/` (farms home), `/farms/:id`, `/farms/:id/analytics`, `/farms/:id/yield`, `/dashboard`, `/scan/new`, `/scan/:id`, `/history`, `/chat`
 
 ### API Server (`artifacts/api-server`)
 
@@ -65,6 +70,11 @@ Express 5 API server with routes for:
 - `GET/POST /api/conversations` — list/create conversations
 - `DELETE /api/conversations/:id` — delete conversation
 - `GET/POST /api/conversations/:id/messages` — get/send messages in a conversation
+- `GET/POST /api/farms` — list/create farms
+- `GET/PUT/DELETE /api/farms/:id` — get/update/delete a farm
+- `GET /api/farms/:id/dashboard` — AI-generated farm dashboard (GPT-4o JSON mode)
+- `GET /api/farms/:id/analytics` — AI analytics (yield, risks, comparison, trend)
+- `POST /api/farms/:id/yield-optimization` — deterministic yield calculator with AI context
 - `GET /api/dashboard/summary` — dashboard stats
 - `GET /api/dashboard/recent` — recent scans
 - `GET /api/dashboard/crop-stats` — per-crop analytics
@@ -77,5 +87,6 @@ Express 5 API server with routes for:
 - `recommendations` — AI-generated farming recommendations per scan
 - `conversations` — chat conversation sessions (title, createdAt)
 - `messages` — individual messages per conversation (role: user/assistant, content, createdAt)
+- `farms` — farm records (name, location, description, status, acreage, crops JSON array, createdAt, updatedAt)
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
