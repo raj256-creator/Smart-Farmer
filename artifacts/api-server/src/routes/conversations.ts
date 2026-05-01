@@ -1,0 +1,130 @@
+import { Router, type IRouter } from "express";
+import { db, conversations, messages } from "@workspace/db";
+import { eq, desc, asc } from "drizzle-orm";
+import {
+  CreateConversationBody,
+  SendConversationMessageBody,
+} from "@workspace/api-zod";
+import { generateChatResponse } from "../lib/aiAnalysis";
+
+function parseId(params: Record<string, string>): number | null {
+  const n = parseInt(params.id, 10);
+  return isNaN(n) || n <= 0 ? null : n;
+}
+
+const router: IRouter = Router();
+
+router.get("/conversations", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(conversations)
+    .orderBy(desc(conversations.createdAt));
+
+  const withLastMessage = await Promise.all(
+    rows.map(async (conv) => {
+      const [lastMsg] = await db
+        .select({ content: messages.content })
+        .from(messages)
+        .where(eq(messages.conversationId, conv.id))
+        .orderBy(desc(messages.createdAt))
+        .limit(1);
+      return { ...conv, lastMessage: lastMsg?.content ?? null };
+    })
+  );
+
+  res.json(withLastMessage);
+});
+
+router.post("/conversations", async (req, res): Promise<void> => {
+  const body = CreateConversationBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const [conv] = await db
+    .insert(conversations)
+    .values({ title: body.data.title })
+    .returning();
+  res.status(201).json(conv);
+});
+
+router.delete("/conversations/:id", async (req, res): Promise<void> => {
+  const id = parseId(req.params as Record<string, string>);
+  if (!id) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
+  await db.delete(conversations).where(eq(conversations.id, id));
+  res.sendStatus(204);
+});
+
+router.get("/conversations/:id/messages", async (req, res): Promise<void> => {
+  const id = parseId(req.params as Record<string, string>);
+  if (!id) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.conversationId, id))
+    .orderBy(asc(messages.createdAt));
+  res.json(rows);
+});
+
+router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
+  const id = parseId(req.params as Record<string, string>);
+  if (!id) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
+  const body = SendConversationMessageBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const { message, cropType } = body.data;
+
+  const [conv] = await db
+    .select()
+    .from(conversations)
+    .where(eq(conversations.id, id));
+  if (!conv) {
+    res.status(404).json({ error: "Conversation not found" });
+    return;
+  }
+
+  const history = await db
+    .select({ role: messages.role, content: messages.content })
+    .from(messages)
+    .where(eq(messages.conversationId, id))
+    .orderBy(asc(messages.createdAt));
+
+  const aiHistory = history.map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
+
+  await db.insert(messages).values({
+    conversationId: id,
+    role: "user",
+    content: message,
+  });
+
+  const { reply, suggestions } = await generateChatResponse(
+    message,
+    cropType ?? null,
+    aiHistory
+  );
+
+  await db.insert(messages).values({
+    conversationId: id,
+    role: "assistant",
+    content: reply,
+  });
+
+  res.json({ reply, suggestions });
+});
+
+export default router;

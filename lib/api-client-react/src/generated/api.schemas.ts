@@ -175,6 +175,32 @@ export interface DashboardSummary {
   cropBreakdown: CropStatItem[];
 }
 
+export interface Conversation {
+  id: number;
+  title: string;
+  createdAt: string;
+  /** @nullable */
+  lastMessage?: string | null;
+}
+
+export interface ConversationMessage {
+  id: number;
+  conversationId: number;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface CreateConversationBody {
+  title: string;
+}
+
+export interface SendConversationMessageBody {
+  message: string;
+  /** @nullable */
+  cropType?: string | null;
+}
+
 export type ListCropScansParams = {
   cropType?: string;
   limit?: number;

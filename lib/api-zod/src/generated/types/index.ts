@@ -9,7 +9,10 @@
 export * from "./chatMessageBody";
 export * from "./chatResponse";
 export * from "./climateData";
+export * from "./conversation";
+export * from "./conversationMessage";
 export * from "./createClimateDataBody";
+export * from "./createConversationBody";
 export * from "./createCropScanBody";
 export * from "./createSoilDataBody";
 export * from "./cropAnalysis";
@@ -24,4 +27,5 @@ export * from "./listCropScansParams";
 export * from "./listRecommendationsParams";
 export * from "./listSoilRecordsParams";
 export * from "./recommendation";
+export * from "./sendConversationMessageBody";
 export * from "./soilData";

@@ -216,6 +216,68 @@ export const SendChatMessageResponse = zod.object({
 });
 
 /**
+ * @summary List all chat conversations
+ */
+export const ListConversationsResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  createdAt: zod.string(),
+  lastMessage: zod.string().nullish(),
+});
+export const ListConversationsResponse = zod.array(
+  ListConversationsResponseItem,
+);
+
+/**
+ * @summary Start a new conversation
+ */
+export const CreateConversationBody = zod.object({
+  title: zod.string(),
+});
+
+/**
+ * @summary Delete a conversation and all its messages
+ */
+export const DeleteConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Get all messages in a conversation
+ */
+export const GetConversationMessagesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetConversationMessagesResponseItem = zod.object({
+  id: zod.number(),
+  conversationId: zod.number(),
+  role: zod.string(),
+  content: zod.string(),
+  createdAt: zod.string(),
+});
+export const GetConversationMessagesResponse = zod.array(
+  GetConversationMessagesResponseItem,
+);
+
+/**
+ * @summary Send a message in an existing conversation
+ */
+export const SendConversationMessageParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SendConversationMessageBody = zod.object({
+  message: zod.string(),
+  cropType: zod.string().nullish(),
+});
+
+export const SendConversationMessageResponse = zod.object({
+  reply: zod.string(),
+  suggestions: zod.array(zod.string()),
+});
+
+/**
  * @summary Get overall dashboard stats and summaries
  */
 export const GetDashboardSummaryResponse = zod.object({

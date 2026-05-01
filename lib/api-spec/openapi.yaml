@@ -265,6 +265,97 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChatResponse"
 
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [recommendations]
+      summary: List all chat conversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      operationId: createConversation
+      tags: [recommendations]
+      summary: Start a new conversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationBody"
+      responses:
+        "201":
+          description: Created conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /conversations/{id}:
+    delete:
+      operationId: deleteConversation
+      tags: [recommendations]
+      summary: Delete a conversation and all its messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Conversation deleted
+
+  /conversations/{id}/messages:
+    get:
+      operationId: getConversationMessages
+      tags: [recommendations]
+      summary: Get all messages in a conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationMessage"
+    post:
+      operationId: sendConversationMessage
+      tags: [recommendations]
+      summary: Send a message in an existing conversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendConversationMessageBody"
+      responses:
+        "200":
+          description: AI reply and suggestions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+
   /dashboard/summary:
     get:
       operationId: getDashboardSummary
@@ -602,3 +693,57 @@ components:
         - count
         - avgYieldKg
         - avgHealthScore
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+        lastMessage:
+          type: ["string", "null"]
+      required:
+        - id
+        - title
+        - createdAt
+
+    ConversationMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - conversationId
+        - role
+        - content
+        - createdAt
+
+    CreateConversationBody:
+      type: object
+      properties:
+        title:
+          type: string
+      required:
+        - title
+
+    SendConversationMessageBody:
+      type: object
+      properties:
+        message:
+          type: string
+        cropType:
+          type: ["string", "null"]
+      required:
+        - message
