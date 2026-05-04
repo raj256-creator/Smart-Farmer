@@ -5,3 +5,4 @@ export * from "./recommendations";
 export * from "./conversations";
 export * from "./messages";
 export * from "./farms";
+export * from "./farmSensors";

@@ -9,6 +9,7 @@ import conversationsRouter from "./conversations";
 import farmsRouter from "./farms";
 import dashboardRouter from "./dashboard";
 import soilClimateRouter from "./soil-climate";
+import farmSensorsRouter from "./farm-sensors";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(conversationsRouter);
 router.use(farmsRouter);
 router.use(dashboardRouter);
 router.use(soilClimateRouter);
+router.use(farmSensorsRouter);
 
 export default router;
