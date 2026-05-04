@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { WeatherWidget } from "@/components/weather-widget";
 import { useGetFarm } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -143,6 +144,15 @@ export default function FarmDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Weather widget */}
+        {farm?.location && (
+          <WeatherWidget
+            location={farm.location}
+            sensorMoisture={latestBatch?.summary.avgMoisture ?? null}
+            sensorHumidity={latestBatch?.summary.avgHumidity ?? null}
+          />
+        )}
 
         {/* No data prompt */}
         {!hasSensorData && !sensorLoading && (

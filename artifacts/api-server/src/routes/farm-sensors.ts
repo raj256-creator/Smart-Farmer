@@ -253,12 +253,45 @@ router.post("/farms/:id/sensors", async (req, res): Promise<void> => {
     else if (summary.avgHumidity < lo) deviations.push(`Humidity ${summary.avgHumidity}% is low (optimal ${lo}–${hi}%); foliar sprays may help reduce transpiration stress`);
   }
 
+  // ── Fetch live weather for the farm location (best-effort, non-blocking) ──
+  let weatherContext = "";
+  try {
+    const apiKey = process.env["OPENWEATHER_API_KEY"];
+    if (apiKey && farm.location) {
+      const params = new URLSearchParams({ location: farm.location });
+      if (summary.avgMoisture != null) params.set("moisture", String(summary.avgMoisture));
+      if (summary.avgHumidity != null) params.set("humidity", String(summary.avgHumidity));
+      const weatherRes = await fetch(
+        `http://localhost:${process.env["PORT"] ?? 8080}/api/weather?${params}`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (weatherRes.ok) {
+        const wd = await weatherRes.json() as {
+          current?: { temp: number; humidity: number; description: string; windSpeed: number };
+          forecast?: { rainNext24hMm: number; rainNext3dMm: number; maxTempNext3d: number; minTempNext3d: number; avgHumidityNext3d: number };
+          insights?: Array<{ type: string; message: string }>;
+        };
+        if (wd.current && wd.forecast) {
+          weatherContext = `
+=== LIVE WEATHER DATA (${farm.location}) ===
+Current Temperature: ${wd.current.temp}°C, Humidity: ${wd.current.humidity}%, Conditions: ${wd.current.description}, Wind: ${wd.current.windSpeed} km/h
+Rain next 24h: ${wd.forecast.rainNext24hMm} mm | Rain next 3 days: ${wd.forecast.rainNext3dMm} mm
+Temperature range next 3 days: ${wd.forecast.minTempNext3d}°C – ${wd.forecast.maxTempNext3d}°C
+Average humidity next 3 days: ${wd.forecast.avgHumidityNext3d}%
+Weather alerts: ${wd.insights?.map((i) => i.message).join("; ") || "None"}`;
+        }
+      }
+    }
+  } catch {
+    // Weather fetch failed silently — analysis continues without it
+  }
+
   // ── AI analysis prompt (comprehensive, data-driven, ICAR-grounded) ────────
   const readingsSample = records.slice(0, 20).map((r, i) =>
     `${r.label || `R${i + 1}`}: pH=${r.ph ?? "N/A"}, moisture=${r.moisture ?? "N/A"}%, temp=${r.temperature ?? "N/A"}°C, humidity=${r.humidity ?? "N/A"}%`
   ).join("\n");
 
-  const aiPrompt = `You are a senior agricultural scientist with expertise in Indian horticulture and soil science. Your analysis must be grounded entirely in the measured sensor data provided — do NOT fabricate or assume any readings.
+  const aiPrompt = `You are a senior agricultural scientist with expertise in Indian horticulture and soil science. Your analysis must be grounded entirely in the measured sensor data provided — do NOT fabricate or assume any readings. Where live weather data is provided, incorporate it into your irrigation, disease risk, and seasonal outlook recommendations.
 
 === FARM PROFILE ===
 Farm Name: ${farm.name}
@@ -277,7 +310,7 @@ Readings with warning flags:  ${warningCount} / ${records.length}
 
 === INDIVIDUAL READINGS (up to 20 shown) ===
 ${readingsSample}
-
+${weatherContext}
 === CROP-SPECIFIC KNOWN RISKS ===
 Diseases to watch: ${cropRef.mainDiseases.join("; ")}
 Pests to watch: ${cropRef.mainPests.join("; ")}

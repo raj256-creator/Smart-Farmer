@@ -60,6 +60,7 @@ React + Vite web app for AI-powered crop monitoring.
 ### API Server (`artifacts/api-server`)
 
 Express 5 API server with routes for:
+- `GET /api/weather?location=...&moisture=...&humidity=...` — Live weather + 5-day forecast + agri insights (OpenWeatherMap, 30-min cache)
 - `GET/POST /api/crops` — crop scan CRUD
 - `POST /api/crops/:id/analyze` — GPT-4o AI analysis
 - `POST /api/crops/detect-image` — GPT-4o crop detection from image
