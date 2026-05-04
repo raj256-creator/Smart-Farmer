@@ -9,6 +9,7 @@ import FarmDashboard from "@/pages/farm-dashboard";
 import FarmChat from "@/pages/farm-chat";
 import FarmScan from "@/pages/farm-scan";
 import FarmHistory from "@/pages/farm-history";
+import FarmTrends from "@/pages/farm-trends";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,9 @@ function Router() {
       </Route>
       <Route path="/farms/:id/history">
         <FarmAuthGuard><FarmHistory /></FarmAuthGuard>
+      </Route>
+      <Route path="/farms/:id/trends">
+        <FarmAuthGuard><FarmTrends /></FarmAuthGuard>
       </Route>
 
       {/* Legacy /farms/:id → redirect to dashboard */}

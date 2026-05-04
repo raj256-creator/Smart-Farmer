@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { Leaf, LayoutDashboard, ScanLine, MessageSquare, History, ArrowLeft } from "lucide-react";
+import { Leaf, LayoutDashboard, ScanLine, MessageSquare, History, ArrowLeft, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FarmLayoutProps {
@@ -12,10 +12,11 @@ export function FarmLayout({ children, farmId, farmName }: FarmLayoutProps) {
   const [location, navigate] = useLocation();
 
   const tabs = [
-    { href: `/farms/${farmId}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
-    { href: `/farms/${farmId}/scan`,      label: "New Scan",  icon: ScanLine },
+    { href: `/farms/${farmId}/dashboard`, label: "Dashboard",    icon: LayoutDashboard },
+    { href: `/farms/${farmId}/scan`,      label: "New Scan",     icon: ScanLine },
+    { href: `/farms/${farmId}/trends`,    label: "Trends",       icon: TrendingUp },
     { href: `/farms/${farmId}/chat`,      label: "AI Assistant", icon: MessageSquare },
-    { href: `/farms/${farmId}/history`,   label: "History",   icon: History },
+    { href: `/farms/${farmId}/history`,   label: "History",      icon: History },
   ];
 
   const isActive = (href: string) => location === href || location.startsWith(href + "/");
