@@ -11,6 +11,7 @@ import {
   Bot, User, Send, Loader2, Plus, Trash2, MessageSquare,
   ChevronLeft, ChevronRight, Mic, MicOff, Volume2, VolumeX,
   Paperclip, X, FlaskConical, BarChart3, Leaf, Languages, ImageIcon,
+  Pencil, Check, AlertTriangle,
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -168,6 +169,16 @@ export default function FarmChat() {
   const [isSending,        setIsSending]        = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Rename state
+  const [renamingId,    setRenamingId]    = useState<number | null>(null);
+  const [renameValue,   setRenameValue]   = useState("");
+  const [headerEditing, setHeaderEditing] = useState(false);
+  const [headerTitle,   setHeaderTitle]   = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Delete confirm state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+
   // Mode & language
   const [mode,         setMode]         = useState<ChatMode>("general");
   const [selectedLang, setSelectedLang] = useState<string>("auto");
@@ -228,11 +239,54 @@ export default function FarmChat() {
     return r.json();
   };
 
-  const handleDelete = async (convId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = async (convId: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setDeleteConfirmId(null);
     await fetch(`${BASE}/api/conversations/${convId}`, { method: "DELETE" });
     queryClient.invalidateQueries({ queryKey: convQueryKey });
-    if (activeId === convId) { setActiveId(null); setLocalSuggestions([]); }
+    if (activeId === convId) { setActiveId(null); setLocalSuggestions([]); setHeaderEditing(false); }
+  };
+
+  const startRename = (conv: Conversation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeleteConfirmId(null);
+    setRenamingId(conv.id);
+    setRenameValue(conv.title);
+    setTimeout(() => renameInputRef.current?.focus(), 0);
+  };
+
+  const commitRename = async (convId: number) => {
+    const title = renameValue.trim();
+    if (!title) { cancelRename(); return; }
+    await fetch(`${BASE}/api/conversations/${convId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    queryClient.invalidateQueries({ queryKey: convQueryKey });
+    setRenamingId(null);
+  };
+
+  const cancelRename = () => { setRenamingId(null); setRenameValue(""); };
+
+  const startHeaderEdit = () => {
+    const conv = convList.find((c) => c.id === activeId);
+    if (!conv) return;
+    setHeaderTitle(conv.title);
+    setHeaderEditing(true);
+    setTimeout(() => renameInputRef.current?.focus(), 0);
+  };
+
+  const commitHeaderEdit = async () => {
+    const title = headerTitle.trim();
+    if (!title || !activeId) { setHeaderEditing(false); return; }
+    await fetch(`${BASE}/api/conversations/${activeId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    queryClient.invalidateQueries({ queryKey: convQueryKey });
+    setHeaderEditing(false);
   };
 
   const handleNewConv = async () => {
@@ -392,19 +446,59 @@ export default function FarmChat() {
               {loadingConvs && <div className="flex justify-center py-6"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>}
               {!loadingConvs && convList.length === 0 && <p className="text-xs text-muted-foreground text-center py-6 px-2">No conversations yet.</p>}
               {convList.map((conv) => (
-                <div key={conv.id}
-                  className={`group flex items-start gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition-colors ${activeId === conv.id ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground"}`}
-                  onClick={() => { setActiveId(conv.id); setLocalSuggestions([]); }}
-                >
-                  <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5 opacity-60" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{conv.title}</p>
-                    {conv.lastMessage && <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage}</p>}
-                  </div>
-                  <button type="button" onClick={(e) => handleDelete(conv.id, e)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-0.5 rounded text-muted-foreground hover:text-destructive">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                <div key={conv.id}>
+                  {renamingId === conv.id ? (
+                    /* ── Inline rename input ── */
+                    <div className="flex items-center gap-1 px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        ref={renameInputRef}
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitRename(conv.id);
+                          if (e.key === "Escape") cancelRename();
+                        }}
+                        onBlur={() => commitRename(conv.id)}
+                        className="flex-1 text-xs bg-background border border-border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-primary min-w-0"
+                      />
+                      <button onClick={() => commitRename(conv.id)} className="p-1 text-primary hover:bg-primary/10 rounded">
+                        <Check className="w-3 h-3" />
+                      </button>
+                      <button onClick={cancelRename} className="p-1 text-muted-foreground hover:bg-muted rounded">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : deleteConfirmId === conv.id ? (
+                    /* ── Delete confirm ── */
+                    <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-destructive/10 border border-destructive/20" onClick={(e) => e.stopPropagation()}>
+                      <AlertTriangle className="w-3 h-3 text-destructive shrink-0" />
+                      <p className="text-xs text-destructive flex-1">Delete?</p>
+                      <button onClick={() => handleDelete(conv.id)} className="text-xs px-2 py-0.5 rounded bg-destructive text-white font-medium">Yes</button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null); }} className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">No</button>
+                    </div>
+                  ) : (
+                    /* ── Normal row ── */
+                    <div
+                      className={`group flex items-start gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition-colors ${activeId === conv.id ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground"}`}
+                      onClick={() => { setActiveId(conv.id); setLocalSuggestions([]); setDeleteConfirmId(null); setRenamingId(null); }}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5 opacity-60" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{conv.title}</p>
+                        {conv.lastMessage && <p className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage}</p>}
+                      </div>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button type="button" onClick={(e) => startRename(conv, e)}
+                          className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(conv.id); setRenamingId(null); }}
+                          className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -422,10 +516,63 @@ export default function FarmChat() {
                 {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </button>
               <Bot className="w-5 h-5 text-primary shrink-0" />
+
+              {/* Title — editable when a conversation is open */}
               <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-bold leading-none">AI Farm Assistant</h2>
+                {activeId && headerEditing ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      ref={renameInputRef}
+                      value={headerTitle}
+                      onChange={(e) => setHeaderTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitHeaderEdit();
+                        if (e.key === "Escape") setHeaderEditing(false);
+                      }}
+                      onBlur={commitHeaderEdit}
+                      className="text-sm font-bold bg-background border border-border rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-primary w-full"
+                    />
+                    <button onClick={commitHeaderEdit} className="p-1 text-primary hover:bg-primary/10 rounded shrink-0">
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setHeaderEditing(false)} className="p-1 text-muted-foreground hover:bg-muted rounded shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 group/title">
+                    <h2 className="text-sm font-bold leading-none truncate">
+                      {activeId ? (convList.find((c) => c.id === activeId)?.title ?? "AI Farm Assistant") : "AI Farm Assistant"}
+                    </h2>
+                    {activeId && (
+                      <button onClick={startHeaderEdit} className="opacity-0 group-hover/title:opacity-100 transition-opacity p-0.5 rounded text-muted-foreground hover:text-primary">
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground truncate mt-0.5">{cropList ? `Crops: ${cropList}` : "Ask anything about your farm"}</p>
               </div>
+
+              {/* Delete current conversation */}
+              {activeId && !headerEditing && (
+                deleteConfirmId === activeId ? (
+                  <div className="flex items-center gap-1.5 bg-destructive/10 border border-destructive/20 rounded-lg px-2 py-1 shrink-0">
+                    <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                    <span className="text-xs text-destructive font-medium">Delete chat?</span>
+                    <button onClick={() => handleDelete(activeId)} className="text-xs px-2 py-0.5 rounded bg-destructive text-white font-medium">Yes</button>
+                    <button onClick={() => setDeleteConfirmId(null)} className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">No</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setDeleteConfirmId(activeId); setHeaderEditing(false); }}
+                    title="Delete this conversation"
+                    className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )
+              )}
 
               {/* Language selector */}
               <Select value={selectedLang} onValueChange={setSelectedLang}>

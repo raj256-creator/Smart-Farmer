@@ -61,6 +61,29 @@ router.post("/conversations", async (req, res): Promise<void> => {
   res.status(201).json(conv);
 });
 
+router.patch("/conversations/:id", async (req, res): Promise<void> => {
+  const id = parseId(req.params as Record<string, string>);
+  if (!id) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
+  const title = (req.body as { title?: string }).title;
+  if (!title || typeof title !== "string" || !title.trim()) {
+    res.status(400).json({ error: "title is required" });
+    return;
+  }
+  const [updated] = await db
+    .update(conversations)
+    .set({ title: title.trim() })
+    .where(eq(conversations.id, id))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Conversation not found" });
+    return;
+  }
+  res.json(updated);
+});
+
 router.delete("/conversations/:id", async (req, res): Promise<void> => {
   const id = parseId(req.params as Record<string, string>);
   if (!id) {
