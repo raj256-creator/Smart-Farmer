@@ -1,35 +1,72 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useRoute, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
 import Home from "@/pages/home";
-import Dashboard from "@/pages/dashboard";
-import ScanWizard from "@/pages/scan-wizard";
-import ScanDetail from "@/pages/scan-detail";
-import History from "@/pages/history";
-import Chat from "@/pages/chat";
 import FarmDashboard from "@/pages/farm-dashboard";
-import FarmAnalytics from "@/pages/farm-analytics";
-import FarmYield from "@/pages/farm-yield";
-import SoilClimate from "@/pages/soil-climate";
+import FarmChat from "@/pages/farm-chat";
+import FarmScan from "@/pages/farm-scan";
+import FarmHistory from "@/pages/farm-history";
 
 const queryClient = new QueryClient();
+
+// ── Auth guard: redirect to home if farm not unlocked ─────────────────────────
+function FarmAuthGuard({ children }: { children: React.ReactNode }) {
+  const [, params] = useRoute("/farms/:id/*?");
+  const [, navigate] = useLocation();
+  const farmId = parseInt(params?.id ?? "0", 10);
+
+  if (farmId > 0) {
+    try {
+      const unlocked: number[] = JSON.parse(localStorage.getItem("agrivision_unlocked") ?? "[]");
+      if (!unlocked.includes(farmId)) {
+        navigate("/");
+        return null;
+      }
+    } catch {
+      navigate("/");
+      return null;
+    }
+  }
+
+  return <>{children}</>;
+}
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/farms/:id" component={FarmDashboard} />
-      <Route path="/farms/:id/analytics" component={FarmAnalytics} />
-      <Route path="/farms/:id/yield" component={FarmYield} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route path="/scan/new" component={ScanWizard} />
-      <Route path="/scan/:id" component={ScanDetail} />
-      <Route path="/history" component={History} />
-      <Route path="/chat" component={Chat} />
-      <Route path="/soil-climate" component={SoilClimate} />
+
+      {/* Per-farm routes */}
+      <Route path="/farms/:id/dashboard">
+        <FarmAuthGuard><FarmDashboard /></FarmAuthGuard>
+      </Route>
+      <Route path="/farms/:id/scan">
+        <FarmAuthGuard><FarmScan /></FarmAuthGuard>
+      </Route>
+      <Route path="/farms/:id/chat">
+        <FarmAuthGuard><FarmChat /></FarmAuthGuard>
+      </Route>
+      <Route path="/farms/:id/history">
+        <FarmAuthGuard><FarmHistory /></FarmAuthGuard>
+      </Route>
+
+      {/* Legacy /farms/:id → redirect to dashboard */}
+      <Route path="/farms/:id">
+        {(params) => {
+          const [, navigate] = useLocation();
+          try {
+            const unlocked: number[] = JSON.parse(localStorage.getItem("agrivision_unlocked") ?? "[]");
+            const id = parseInt(params?.id ?? "0", 10);
+            if (unlocked.includes(id)) { navigate(`/farms/${id}/dashboard`); return null; }
+          } catch {}
+          navigate("/");
+          return null;
+        }}
+      </Route>
+
       <Route component={NotFound} />
     </Switch>
   );

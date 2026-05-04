@@ -10,6 +10,7 @@ import farmsRouter from "./farms";
 import dashboardRouter from "./dashboard";
 import soilClimateRouter from "./soil-climate";
 import farmSensorsRouter from "./farm-sensors";
+import farmScansRouter from "./farm-scans";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(farmsRouter);
 router.use(dashboardRouter);
 router.use(soilClimateRouter);
 router.use(farmSensorsRouter);
+router.use(farmScansRouter);
 
 export default router;

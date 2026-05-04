@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, conversations, messages } from "@workspace/db";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, desc, asc, and, isNull } from "drizzle-orm";
 import {
   CreateConversationBody,
   SendConversationMessageBody,
@@ -12,13 +12,21 @@ function parseId(params: Record<string, string>): number | null {
   return isNaN(n) || n <= 0 ? null : n;
 }
 
+function parseFarmId(query: Record<string, string | string[]>): number | null {
+  const raw = Array.isArray(query.farmId) ? query.farmId[0] : query.farmId;
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return isNaN(n) || n <= 0 ? null : n;
+}
+
 const router: IRouter = Router();
 
-router.get("/conversations", async (_req, res): Promise<void> => {
-  const rows = await db
-    .select()
-    .from(conversations)
-    .orderBy(desc(conversations.createdAt));
+router.get("/conversations", async (req, res): Promise<void> => {
+  const farmId = parseFarmId(req.query as Record<string, string>);
+
+  const rows = farmId
+    ? await db.select().from(conversations).where(eq(conversations.farmId, farmId)).orderBy(desc(conversations.createdAt))
+    : await db.select().from(conversations).where(isNull(conversations.farmId)).orderBy(desc(conversations.createdAt));
 
   const withLastMessage = await Promise.all(
     rows.map(async (conv) => {
@@ -41,9 +49,12 @@ router.post("/conversations", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
+  const farmIdRaw = (req.body as { farmId?: unknown }).farmId;
+  const farmId = typeof farmIdRaw === "number" ? farmIdRaw : null;
+
   const [conv] = await db
     .insert(conversations)
-    .values({ title: body.data.title })
+    .values({ title: body.data.title, farmId })
     .returning();
   res.status(201).json(conv);
 });
@@ -54,6 +65,7 @@ router.delete("/conversations/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid conversation id" });
     return;
   }
+  await db.delete(messages).where(eq(messages.conversationId, id));
   await db.delete(conversations).where(eq(conversations.id, id));
   res.sendStatus(204);
 });
@@ -85,6 +97,7 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
   }
 
   const { message, cropType } = body.data;
+  const farmContext = (req.body as { farmContext?: string }).farmContext ?? null;
 
   const [conv] = await db
     .select()
@@ -115,7 +128,8 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
   const { reply, suggestions } = await generateChatResponse(
     message,
     cropType ?? null,
-    aiHistory
+    aiHistory,
+    farmContext
   );
 
   await db.insert(messages).values({

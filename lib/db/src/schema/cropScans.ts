@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 
 export const cropScansTable = pgTable("crop_scans", {
   id: serial("id").primaryKey(),
+  farmId: integer("farm_id"),
   cropType: text("crop_type"),
   growthStage: text("growth_stage"),
   imageUrl: text("image_url"),
