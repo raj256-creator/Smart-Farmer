@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Leaf, LayoutDashboard, Scan, History, MessageSquare, Home } from "lucide-react";
+import { Leaf, LayoutDashboard, Scan, History, MessageSquare, Home, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -8,6 +8,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/", label: "My Farms", icon: Home },
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/soil-climate", label: "Soil & Climate", icon: FlaskConical },
     { href: "/scan/new", label: "New Scan", icon: Scan },
     { href: "/history", label: "History", icon: History },
     { href: "/chat", label: "AI Assistant", icon: MessageSquare },

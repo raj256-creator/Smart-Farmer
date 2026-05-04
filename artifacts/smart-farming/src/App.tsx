@@ -13,6 +13,7 @@ import Chat from "@/pages/chat";
 import FarmDashboard from "@/pages/farm-dashboard";
 import FarmAnalytics from "@/pages/farm-analytics";
 import FarmYield from "@/pages/farm-yield";
+import SoilClimate from "@/pages/soil-climate";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/scan/:id" component={ScanDetail} />
       <Route path="/history" component={History} />
       <Route path="/chat" component={Chat} />
+      <Route path="/soil-climate" component={SoilClimate} />
       <Route component={NotFound} />
     </Switch>
   );
