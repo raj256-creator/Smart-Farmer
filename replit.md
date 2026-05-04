@@ -42,12 +42,18 @@ React + Vite web app for AI-powered crop monitoring.
 - Global dashboard with charts (crop breakdown, health distribution)
 - Scan history with Clear All feature
 
-**AI Chatbot (Chat page)**:
+**AI Chatbot (Chat page / farm-chat.tsx)**:
 - Sidebar shows all past conversations (stored in DB), collapsible
 - Each conversation maintains full message history; AI uses prior context
-- Structured responses: Understanding the Problem, Key Insights, Solution, Prevention Tips, Extra Advice
+- **3 AI Modes** (switchable via pills in header):
+  - General: Understanding the Problem / Key Insights / Solution / Prevention Tips / Extra Advice
+  - Agro-Technical: Technical Diagnosis / Scientific Analysis / Treatment Protocol / Preventive Management / Field Monitoring Parameters (uses scientific nomenclature, dosages, ICAR protocols)
+  - Analyst: Market Overview / Economic Analysis / Yield & Revenue Projections / Risk Assessment / Strategic Recommendations (MSP, APMC prices, ROI)
+- **Regional language support**: 12 Indian languages (Hindi, Marathi, Telugu, Tamil, Kannada, Malayalam, Bengali, Gujarati, Punjabi, Odia, Urdu, English) + Auto-detect. AI responds in detected/selected language including native script.
+- **Voice input**: Mic button using Web Speech API (SpeechRecognition) — speaks question, transcribes into input box. Language-aware (uses selected language for recognition)
+- **Voice output**: Speaker toggle — AI replies are read aloud via SpeechSynthesis in selected language
+- **Field observation image upload**: Paperclip button attaches a photo; AI auto-analyzes for crop identification, symptoms, disease/pest detection and integrates findings with the text query (multimodal GPT-4o)
 - Suggestion chips after each AI reply for quick follow-up questions
-- System prompt: detailed 7-capability agriculture assistant
 
 **Yield Optimizer logic**:
 - Crop density data per crop (low/medium/high): plants/acre, yield kg/plant, price INR/kg, spacing

@@ -4,6 +4,8 @@ import { logger } from "./logger";
 const CROPS = ["Mango", "Dragon Fruit", "Chikoo", "Pomegranate", "Mulberry"] as const;
 type CropType = typeof CROPS[number];
 
+export type ChatMode = "general" | "agro-technical" | "analyst";
+
 export interface SoilInput {
   phLevel?: number | null;
   moisturePercent?: number | null;
@@ -173,18 +175,74 @@ export async function runAIAnalysis(
   return parseGptResponse(raw, cropType, "Vegetative");
 }
 
-export async function generateChatResponse(
-  message: string,
-  cropType?: string | null,
-  history?: Array<{ role: "user" | "assistant"; content: string }>,
-  farmContext?: string | null
-): Promise<{ reply: string; suggestions: string[] }> {
-  const systemPrompt = `You are an AI Agriculture Assistant providing accurate, practical, farming guidance for Indian farmers.
+// ── Mode-specific system prompts ──────────────────────────────────────────────
 
-${farmContext ? `Farm Context:\n${farmContext}\n` : ""}
-${cropType ? `Current crop focus: ${cropType}. Prioritize advice for this crop.` : ""}
+function buildChatSystemPrompt(
+  mode: ChatMode,
+  cropType: string | null | undefined,
+  farmContext: string | null | undefined,
+  language: string | null | undefined,
+  hasImage: boolean
+): string {
+  const langInstruction = language && language !== "auto"
+    ? `\nLANGUAGE: The user has selected "${language}" as their language. Respond entirely in that language — including all section headings, advice, and follow-up suggestions. Use the native script (e.g., Devanagari for Hindi/Marathi, Telugu script for Telugu, etc.).`
+    : `\nLANGUAGE: Detect the language the user writes in and respond naturally in that same language. You must support all major Indian languages: Hindi (हिंदी), Marathi (मराठी), Telugu (తెలుగు), Tamil (தமிழ்), Kannada (ಕನ್ನಡ), Malayalam (മലയാളം), Bengali (বাংলা), Gujarati (ગુજરાતી), Punjabi (ਪੰਜਾਬੀ), Odia (ଓଡ଼ିଆ), and English. When responding in a regional language, include all headings and suggestions in that language.`;
 
-Capabilities: crop guidance, disease & pest support, soil health, irrigation scheduling, yield optimization.
+  const imageInstruction = hasImage
+    ? `\nFIELD OBSERVATION IMAGE: The user has attached a field photo. Automatically analyze it for: crop species identification, visible symptoms (leaf colour changes, spots, necrosis, wilting, lesions, powdery/downy deposits, pest damage, webbing, bore holes), probable disease or pest identification from visual cues, and visible severity. Integrate your visual findings directly with the user's text query. State clearly what you see in the image before giving recommendations.`
+    : "";
+
+  const farmCtx = farmContext ? `\nFarm Context: ${farmContext}` : "";
+  const cropCtx = cropType ? `\nCrop focus: ${cropType}. Prioritize advice for this crop.` : "";
+
+  if (mode === "agro-technical") {
+    return `You are an expert Agronomist and Plant Pathologist with deep specialization in tropical and subtropical horticulture across Indian agro-climatic zones. You apply evidence-based agronomic science and use precise scientific nomenclature.
+${farmCtx}${cropCtx}${langInstruction}${imageInstruction}
+
+Provide technically rigorous, science-based analysis. Include:
+- Causal organism names (genus, species, strain where known)
+- Precise input dosages (kg/ha, mL/L, ppm, g/plant)
+- Application timing relative to growth stage or weather conditions
+- Standard agronomic protocols (ICAR, KVK, or international equivalents)
+
+Structure every reply with these exact sections:
+- Technical Diagnosis
+- Scientific Analysis
+- Treatment Protocol
+- Preventive Management
+- Field Monitoring Parameters
+
+Always end with a JSON block on the last line:
+SUGGESTIONS_JSON: ["technical follow-up 1", "technical follow-up 2", "technical follow-up 3", "technical follow-up 4"]`;
+  }
+
+  if (mode === "analyst") {
+    return `You are an Agricultural Business Analyst specializing in Indian farm economics, crop market intelligence, agri-value chains, and farming investment strategy.
+${farmCtx}${cropCtx}${langInstruction}${imageInstruction}
+
+Provide data-driven economic and market analysis. Include where relevant:
+- MSP (Minimum Support Price) and APMC mandi price ranges (₹/quintal)
+- Input cost breakdowns and cost-benefit ratios
+- Yield and revenue projections (per acre and total farm)
+- ROI estimates and payback periods
+- Seasonal price cycles and optimal selling windows
+- Risk factors (weather, market glut, pest pressure) affecting profitability
+
+Structure every reply with these exact sections:
+- Market Overview
+- Economic Analysis
+- Yield & Revenue Projections
+- Risk Assessment
+- Strategic Recommendations
+
+Always end with a JSON block on the last line:
+SUGGESTIONS_JSON: ["business question 1", "business question 2", "business question 3", "business question 4"]`;
+  }
+
+  return `You are an AI Agriculture Assistant providing accurate, practical farming guidance for Indian farmers.
+${farmCtx}${cropCtx}${langInstruction}${imageInstruction}
+
+Capabilities: crop disease & pest guidance, soil health, irrigation scheduling, fertiliser advice, yield optimisation, post-harvest handling.
 
 Structure your reply with these sections where applicable:
 - Understanding the Problem
@@ -194,15 +252,42 @@ Structure your reply with these sections where applicable:
 - Extra Advice
 
 Always end with a JSON block on the last line:
-SUGGESTIONS_JSON: ["question 1", "question 2", "question 3", "question 4"]`;
+SUGGESTIONS_JSON: ["follow-up question 1", "follow-up question 2", "follow-up question 3", "follow-up question 4"]`;
+}
+
+export async function generateChatResponse(
+  message: string,
+  cropType?: string | null,
+  history?: Array<{ role: "user" | "assistant"; content: string }>,
+  farmContext?: string | null,
+  mode: ChatMode = "general",
+  language?: string | null,
+  imageData?: string | null
+): Promise<{ reply: string; suggestions: string[] }> {
+  const hasImage = !!(imageData?.startsWith("data:image/"));
+  const systemPrompt = buildChatSystemPrompt(mode, cropType, farmContext, language, hasImage);
+
+  logger.info({ mode, language: language ?? "auto", hasImage }, "Generating chat response");
+
+  type ContentPart =
+    | { type: "text"; text: string }
+    | { type: "image_url"; image_url: { url: string; detail: "high" } };
+
+  const userContent: ContentPart[] = [{ type: "text", text: message }];
+  if (hasImage && imageData) {
+    userContent.push({ type: "image_url", image_url: { url: imageData, detail: "high" } });
+  }
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
-    max_completion_tokens: 1024,
+    max_completion_tokens: 1500,
     messages: [
       { role: "system", content: systemPrompt },
-      ...(history ?? []),
-      { role: "user", content: message },
+      ...(history ?? []).map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      { role: "user", content: hasImage ? userContent : message },
     ],
   });
 

@@ -5,7 +5,7 @@ import {
   CreateConversationBody,
   SendConversationMessageBody,
 } from "@workspace/api-zod";
-import { generateChatResponse } from "../lib/aiAnalysis";
+import { generateChatResponse, type ChatMode } from "../lib/aiAnalysis";
 
 function parseId(params: Record<string, string>): number | null {
   const n = parseInt(params.id, 10);
@@ -18,6 +18,8 @@ function parseFarmId(query: Record<string, string | string[]>): number | null {
   const n = parseInt(raw, 10);
   return isNaN(n) || n <= 0 ? null : n;
 }
+
+const VALID_MODES: ChatMode[] = ["general", "agro-technical", "analyst"];
 
 const router: IRouter = Router();
 
@@ -97,7 +99,20 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
   }
 
   const { message, cropType } = body.data;
-  const farmContext = (req.body as { farmContext?: string }).farmContext ?? null;
+  const reqBody = req.body as {
+    farmContext?: string;
+    mode?: string;
+    language?: string;
+    imageData?: string;
+  };
+  const farmContext = reqBody.farmContext ?? null;
+  const mode: ChatMode = VALID_MODES.includes(reqBody.mode as ChatMode)
+    ? (reqBody.mode as ChatMode)
+    : "general";
+  const language = typeof reqBody.language === "string" ? reqBody.language : null;
+  const imageData = typeof reqBody.imageData === "string" && reqBody.imageData.startsWith("data:image/")
+    ? reqBody.imageData
+    : null;
 
   const [conv] = await db
     .select()
@@ -129,7 +144,10 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     message,
     cropType ?? null,
     aiHistory,
-    farmContext
+    farmContext,
+    mode,
+    language,
+    imageData
   );
 
   await db.insert(messages).values({
