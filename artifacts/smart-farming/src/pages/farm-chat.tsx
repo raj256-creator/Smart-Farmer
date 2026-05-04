@@ -440,14 +440,6 @@ export default function FarmChat() {
                 </SelectContent>
               </Select>
 
-              {/* Voice output toggle */}
-              <button
-                onClick={() => { setVoiceOutput((v) => !v); if (isSpeaking) stopSpeaking(); }}
-                title={voiceOutput ? "Voice output on — click to disable" : "Enable voice output"}
-                className={`p-1.5 rounded-lg transition-colors shrink-0 ${voiceOutput ? "bg-primary/10 text-primary" : "hover:bg-muted text-muted-foreground"}`}
-              >
-                {voiceOutput ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              </button>
             </div>
 
             {/* Row 2: Mode pills */}
