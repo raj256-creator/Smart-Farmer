@@ -13,12 +13,12 @@ fi
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 if [ -z "$BRANCH" ] || [ "$BRANCH" = "HEAD" ]; then
-  echo "[auto-push] Detached HEAD state — skipping GitHub push."
+  echo "[auto-push] Detached HEAD — skipping GitHub push."
   exit 0
 fi
 
-SCRIPT_DIR="$(git rev-parse --show-toplevel)/scripts"
-export GIT_ASKPASS="$SCRIPT_DIR/git-askpass.sh"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+export GIT_ASKPASS="$REPO_ROOT/scripts/git-askpass.sh"
 
 echo "[auto-push] Pushing to GitHub (branch: $BRANCH)..."
 if git push origin "HEAD:refs/heads/$BRANCH" --quiet 2>&1; then
@@ -26,5 +26,3 @@ if git push origin "HEAD:refs/heads/$BRANCH" --quiet 2>&1; then
 else
   echo "[auto-push] Push failed (remote may have diverged). Sync GitHub manually if needed."
 fi
-
-exit 0
