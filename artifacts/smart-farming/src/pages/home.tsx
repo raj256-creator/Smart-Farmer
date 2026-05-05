@@ -109,7 +109,7 @@ export default function Home() {
             <span className="font-bold text-xl">AgriVision</span>
           </div>
           <Button onClick={openCreate} className="gap-2">
-            <Plus className="w-4 h-4" />Add Farm
+            <Plus className="w-4 h-4" />New Crop
           </Button>
         </div>
       </header>
