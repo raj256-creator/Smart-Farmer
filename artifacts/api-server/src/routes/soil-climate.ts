@@ -195,6 +195,8 @@ router.post("/soil-climate/analyze", async (req, res): Promise<void> => {
       ).join("\n")}\n\nUsing this weather forecast, predict how the sensor metrics (pH, moisture, temperature, humidity) will trend over the coming days and provide weather-aware advice.`
     : "";
 
+  const lastDay = records.length;
+
   const aiPrompt = `You are an expert soil and climate analyst for agriculture. The data below represents day-by-day sensor readings from a farm field.
 
 Crops grown: ${cropContext.length ? cropContext.join(", ") : "mixed / unspecified"}
@@ -205,6 +207,8 @@ Day-wise readings:
 ${dataDesc}
 ${weatherSection}
 
+Based on the observed day-by-day trends${weatherForecast ? " and the weather forecast" : ""}, predict the NUMERIC values for each metric at +3 days (Day ${lastDay + 3}) and +7 days (Day ${lastDay + 7}) from the last recorded day. Use linear trend extrapolation adjusted for weather impact where available. Values must be realistic numbers — pH between 3-10, moisture 0-100%, temperature -10 to 60°C, humidity 0-100%.
+
 Return a JSON object (no markdown) with:
 {
   "trendInsights": "<2-4 sentences describing day-by-day patterns, trends, and how the metrics are changing over time${weatherForecast ? ", incorporating the weather forecast" : ""}>",
@@ -212,7 +216,25 @@ Return a JSON object (no markdown) with:
   "overallAssessment": "<1-2 sentences overall soil-climate health summary>",
   "cropRecommendations": ["<specific actionable recommendation 1>", "<recommendation 2>", "<recommendation 3>"],
   "immediateActions": ["<urgent action if any critical values>", "<action 2>"],
-  "seasonalOutlook": "<1 sentence forecast or advice based on current conditions${weatherForecast ? " and weather forecast" : ""}>"
+  "seasonalOutlook": "<1 sentence forecast or advice based on current conditions${weatherForecast ? " and weather forecast" : ""}>"  ,
+  "predictions": {
+    "plus3d": {
+      "label": "Day ${lastDay + 3} (+3d forecast)",
+      "ph": <predicted pH number>,
+      "moisture": <predicted moisture % number>,
+      "temperature": <predicted temperature °C number>,
+      "humidity": <predicted humidity % number>,
+      "confidence": "<low|medium|high>"
+    },
+    "plus7d": {
+      "label": "Day ${lastDay + 7} (+7d forecast)",
+      "ph": <predicted pH number>,
+      "moisture": <predicted moisture % number>,
+      "temperature": <predicted temperature °C number>,
+      "humidity": <predicted humidity % number>,
+      "confidence": "<low|medium|high>"
+    }
+  }
 }`;
 
   const aiResp = await openai.chat.completions.create({
