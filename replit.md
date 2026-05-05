@@ -16,6 +16,23 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
+## GitHub Auto-Sync
+
+Every commit is automatically pushed to the GitHub remote (`origin`: `https://github.com/raj256-creator/Smart-Farmer`) via a post-commit hook.
+
+**Required secret**: `GITHUB_PERSONAL_ACCESS_TOKEN` — a GitHub Personal Access Token with `repo` scope.
+
+**Hook setup**: `core.hooksPath` is configured to `scripts/hooks/` in `.git/config`. In a fresh environment, run once to activate:
+```bash
+bash scripts/setup-hooks.sh
+```
+
+**Files**:
+- `scripts/hooks/post-commit` — the active git hook (fires after every commit)
+- `scripts/github-push.sh` — push logic (standard fast-forward, fails loudly on divergence)
+- `scripts/git-askpass.sh` — securely provides token to git without exposing it in CLI args
+- `scripts/setup-hooks.sh` — sets `core.hooksPath` in a new environment
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
