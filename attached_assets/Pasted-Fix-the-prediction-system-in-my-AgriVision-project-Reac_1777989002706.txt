@@ -1,0 +1,89 @@
+Fix the prediction system in my AgriVision project (React + Express + PostgreSQL) to prevent unrealistic and impossible values (e.g. temperature > 100°C, moisture > 100%).
+
+Current Issue:
+
+* Predictions are using simple linear extrapolation
+* No limits or constraints are applied
+* Values are exploding and unrealistic
+
+Implement the following fixes:
+
+1. Add Value Constraints (Clamping)
+
+* Ensure predictions stay within realistic agricultural ranges:
+
+  * pH: 4 to 9
+  * Moisture: 0 to 100 (%)
+  * Humidity: 0 to 100 (%)
+  * Temperature: 10 to 50 (°C)
+* Create a reusable clamp function and apply it to all predictions
+
+2. Improve Trend Calculation
+
+* Replace simple difference (last - first) with average step-wise trend
+* Use multiple past data points instead of only first and last
+
+3. Add Damping Factor
+
+* Reduce prediction aggressiveness:
+
+  * Use a damping factor (0.2 to 0.4)
+* Formula:
+  predicted = last_value + (trend * damping_factor * days)
+
+4. Add Rate Limiting (VERY IMPORTANT)
+
+* Limit how much a value can change per day:
+
+  * Temperature: max ±2°C per day
+  * Moisture: max ±10% per day
+  * Humidity: max ±10% per day
+  * pH: max ±0.2 per day
+
+5. Require Minimum Data Points
+
+* If less than 3 data points:
+
+  * Do NOT extrapolate aggressively
+  * Return last known value or very small change
+
+6. Smooth Predictions
+
+* Use moving average before prediction to reduce noise
+
+7. Final Prediction Pipeline (in order):
+
+* Get historical data
+* Smooth data (moving average)
+* Calculate trend
+* Apply damping
+* Apply rate limit
+* Clamp to realistic bounds
+
+8. Update Backend Logic
+
+* Refactor prediction logic into a separate service:
+
+  * predictionService.js
+* Ensure all prediction APIs use this safe logic
+
+9. Update Frontend
+
+* Show realistic values only
+* If value was clamped:
+
+  * Display note: "Adjusted to realistic range"
+* Fix charts so predicted line is not exaggerated
+
+10. Constraints
+
+* Do not use heavy ML libraries
+* Keep logic simple and explainable
+* Use only existing data (no random values)
+
+Return:
+
+* Updated prediction function (clean code)
+* predictionService.js file
+* Example API integration
+* Any required frontend updates
