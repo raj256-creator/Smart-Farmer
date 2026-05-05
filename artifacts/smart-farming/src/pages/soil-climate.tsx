@@ -10,14 +10,14 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine,
 } from "recharts";
 import {
   Upload, FileSpreadsheet, Plus, Trash2, Loader2,
   FlaskConical, AlertTriangle, CheckCircle2, XCircle,
   Info, Download, RefreshCw, Thermometer, Droplets,
-  Wind, Activity,
+  Wind, Activity, Cloud, MapPin,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -38,16 +38,29 @@ interface RecordAnalysis {
 
 type Status = "optimal" | "warning" | "critical" | "missing";
 
+interface WeatherForecastDay {
+  date: string;
+  dayLabel: string;
+  tempMax: number;
+  tempMin: number;
+  humidity: number;
+  rainMm: number;
+  rainProbPct: number;
+  description: string;
+}
+
 interface AnalysisResult {
   summary: { recordCount: number; avgPh: number | null; avgMoisture: number | null; avgTemperature: number | null; avgHumidity: number | null };
   avgStatuses: { ph: Status; moisture: Status; temperature: Status; humidity: Status };
   overallHealthScore: number;
   perRecordAnalysis: RecordAnalysis[];
   trendInsights: string;
+  weatherTrendInsight?: string;
   overallAssessment: string;
   cropRecommendations: string[];
   immediateActions: string[];
   seasonalOutlook: string;
+  weatherForecast?: WeatherForecastDay[] | null;
 }
 
 // ── Column aliases for auto-detection ────────────────────────────────────────
@@ -56,7 +69,7 @@ const COL_ALIASES: Record<string, string[]> = {
   moisture:    ["moisture", "soil moisture", "soil_moisture", "moisture%", "moisture_pct", "sm", "vol moisture", "vwc"],
   temperature: ["temperature", "temp", "temp_c", "temperature_c", "air temp", "air_temp", "temp (c)", "temperature (°c)", "temperature(c)"],
   humidity:    ["humidity", "rh", "relative humidity", "rel_humidity", "humidity%", "humidity_pct", "relative_humidity", "air humidity"],
-  label:       ["label", "name", "id", "reading", "sample", "location", "site", "date", "time", "timestamp"],
+  label:       ["label", "name", "id", "reading", "sample", "location", "site", "date", "time", "timestamp", "day"],
 };
 
 function detectColumn(headers: string[], field: string): string | null {
@@ -101,12 +114,12 @@ const OPTIMAL_RANGES = { ph: [6.0, 7.5], moisture: [40, 70], temperature: [18, 3
 // ── Sample CSV download ───────────────────────────────────────────────────────
 function downloadSampleCSV() {
   const rows = [
-    ["Label", "pH Level", "Moisture (%)", "Temperature (°C)", "Humidity (%)"],
-    ["Field A - Zone 1", "6.5", "55", "24", "65"],
-    ["Field A - Zone 2", "7.1", "48", "26", "62"],
-    ["Field B - Zone 1", "5.8", "72", "22", "74"],
-    ["Field B - Zone 2", "6.9", "38", "29", "58"],
-    ["Field C - Zone 1", "8.2", "25", "35", "42"],
+    ["Day", "pH Level", "Moisture (%)", "Temperature (°C)", "Humidity (%)"],
+    ["Day 1", "6.5", "55", "24", "65"],
+    ["Day 2", "6.7", "52", "25", "63"],
+    ["Day 3", "6.3", "48", "27", "61"],
+    ["Day 4", "6.8", "45", "28", "60"],
+    ["Day 5", "7.0", "42", "29", "58"],
   ];
   const csv = rows.map((r) => r.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -117,30 +130,44 @@ function downloadSampleCSV() {
 }
 
 // ── Empty record factory ──────────────────────────────────────────────────────
-const emptyRecord = (): DataRecord => ({ label: "", ph: "", moisture: "", temperature: "", humidity: "" });
+const emptyRecord = (dayNum: number): DataRecord => ({
+  label: `Day ${dayNum}`,
+  ph: "", moisture: "", temperature: "", humidity: "",
+});
+
+// ── Rain bar color ────────────────────────────────────────────────────────────
+function rainColor(mm: number) {
+  if (mm <= 0) return "#cbd5e1";
+  if (mm < 5) return "#93c5fd";
+  if (mm < 15) return "#3b82f6";
+  return "#1d4ed8";
+}
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function SoilClimate() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // shared state
-  const [activeTab, setActiveTab] = useState<"upload" | "manual">("upload");
-  const [loading, setLoading]     = useState(false);
-  const [result, setResult]       = useState<AnalysisResult | null>(null);
-  const [error, setError]         = useState<string | null>(null);
-  const [cropContext, setCropContext] = useState<string>("");
+  const [activeTab, setActiveTab]   = useState<"upload" | "manual">("upload");
+  const [loading, setLoading]       = useState(false);
+  const [result, setResult]         = useState<AnalysisResult | null>(null);
+  const [error, setError]           = useState<string | null>(null);
+  const [cropContext, setCropContext]   = useState<string>("");
+  const [farmLocation, setFarmLocation] = useState<string>("");
 
   // upload tab state
-  const [rawHeaders, setRawHeaders]     = useState<string[]>([]);
-  const [rawRows, setRawRows]           = useState<Record<string, string>[]>([]);
-  const [colMap, setColMap]             = useState<Record<string, string>>({});
-  const [fileName, setFileName]         = useState<string>("");
-  const [dragOver, setDragOver]         = useState(false);
+  const [rawHeaders, setRawHeaders]       = useState<string[]>([]);
+  const [rawRows, setRawRows]             = useState<Record<string, string>[]>([]);
+  const [colMap, setColMap]               = useState<Record<string, string>>({});
+  const [fileName, setFileName]           = useState<string>("");
+  const [dragOver, setDragOver]           = useState(false);
   const [previewMapped, setPreviewMapped] = useState<DataRecord[]>([]);
-  const [mappingDone, setMappingDone]   = useState(false);
+  const [mappingDone, setMappingDone]     = useState(false);
 
-  // manual entry state
-  const [manualRows, setManualRows] = useState<DataRecord[]>([emptyRecord()]);
+  // manual entry state — start with 3 day rows
+  const [manualRows, setManualRows] = useState<DataRecord[]>([
+    emptyRecord(1), emptyRecord(2), emptyRecord(3),
+  ]);
 
   // ── File parsing ─────────────────────────────────────────────────────────
   const parseFile = useCallback((file: File) => {
@@ -153,7 +180,6 @@ export default function SoilClimate() {
       const headers = Object.keys(rows[0]);
       setRawHeaders(headers);
       setRawRows(rows);
-      // Auto-detect column mapping
       const detected: Record<string, string> = {};
       for (const field of ["label", "ph", "moisture", "temperature", "humidity"]) {
         const match = detectColumn(headers, field);
@@ -200,7 +226,7 @@ export default function SoilClimate() {
 
   const applyMapping = () => {
     const mapped = rawRows.map((row, i) => ({
-      label:       colMap.label       ? (row[colMap.label] ?? `Reading ${i + 1}`)  : `Reading ${i + 1}`,
+      label:       colMap.label       ? (row[colMap.label] ?? `Day ${i + 1}`)  : `Day ${i + 1}`,
       ph:          colMap.ph          ? (row[colMap.ph] ?? "")          : "",
       moisture:    colMap.moisture    ? (row[colMap.moisture] ?? "")    : "",
       temperature: colMap.temperature ? (row[colMap.temperature] ?? "") : "",
@@ -216,8 +242,8 @@ export default function SoilClimate() {
     try {
       const payload = records
         .filter((r) => r.ph || r.moisture || r.temperature || r.humidity)
-        .map((r) => ({
-          label:       r.label || undefined,
+        .map((r, i) => ({
+          label:       r.label || `Day ${i + 1}`,
           ph:          r.ph          ? parseFloat(r.ph)          : null,
           moisture:    r.moisture    ? parseFloat(r.moisture)    : null,
           temperature: r.temperature ? parseFloat(r.temperature) : null,
@@ -231,7 +257,11 @@ export default function SoilClimate() {
       const resp = await fetch(`${BASE}/api/soil-climate/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records: payload, cropContext: crops }),
+        body: JSON.stringify({
+          records: payload,
+          cropContext: crops,
+          location: farmLocation.trim() || undefined,
+        }),
       });
       if (!resp.ok) throw new Error(await resp.text());
       const data = await resp.json() as AnalysisResult;
@@ -246,18 +276,26 @@ export default function SoilClimate() {
   // ── Manual row helpers ────────────────────────────────────────────────────
   const updateRow = (i: number, field: keyof DataRecord, val: string) =>
     setManualRows((rows) => rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
-  const addRow    = () => setManualRows((r) => [...r, emptyRecord()]);
+  const addRow    = () => setManualRows((r) => [...r, emptyRecord(r.length + 1)]);
   const removeRow = (i: number) => setManualRows((r) => r.filter((_, idx) => idx !== i));
 
   // ── Derived chart data ────────────────────────────────────────────────────
-  const chartData = result?.perRecordAnalysis.map((r, i) => ({
-    name: r.label.length > 14 ? r.label.slice(0, 13) + "…" : r.label,
-    ph:          result.summary.avgPh          != null ? (r.values.ph          ?? null) : null,
-    moisture:    result.summary.avgMoisture    != null ? (r.values.moisture    ?? null) : null,
-    temperature: result.summary.avgTemperature != null ? (r.values.temperature ?? null) : null,
-    humidity:    result.summary.avgHumidity    != null ? (r.values.humidity    ?? null) : null,
-    index: i,
+  const chartData = result?.perRecordAnalysis.map((r) => ({
+    name: r.label,
+    ph:          r.values.ph          ?? null,
+    moisture:    r.values.moisture    ?? null,
+    temperature: r.values.temperature ?? null,
+    humidity:    r.values.humidity    ?? null,
   })) ?? [];
+
+  const weatherChartData = (result?.weatherForecast ?? []).map((d) => ({
+    name:     d.dayLabel,
+    tempMax:  d.tempMax,
+    tempMin:  d.tempMin,
+    humidity: d.humidity,
+    rainMm:   d.rainMm,
+    rainProb: d.rainProbPct,
+  }));
 
   const scoreColor = (s: number) => s >= 75 ? "text-green-600" : s >= 50 ? "text-amber-600" : "text-red-600";
   const scoreBg    = (s: number) => s >= 75 ? "bg-green-50 border-green-200" : s >= 50 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200";
@@ -274,7 +312,7 @@ export default function SoilClimate() {
               Soil & Climate Analysis
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Upload a CSV / Excel file or enter readings manually — get AI-powered live analysis of pH, moisture, temperature, and humidity.
+              Upload a CSV / Excel file or enter day-wise readings manually — get AI-powered analysis with weather-integrated trend prediction.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={downloadSampleCSV} className="gap-1.5 shrink-0">
@@ -287,16 +325,30 @@ export default function SoilClimate() {
           {/* Left panel — input */}
           <div className="lg:col-span-2 space-y-4">
 
-            {/* Crop context */}
+            {/* Crop context + location */}
             <Card>
-              <CardContent className="pt-4 pb-3 space-y-1.5">
-                <Label className="text-xs font-semibold">Crops Grown (optional)</Label>
-                <Input
-                  placeholder="e.g. Mango, Pomegranate, Dragon Fruit"
-                  value={cropContext}
-                  onChange={(e) => setCropContext(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">Comma-separated list — used to tailor AI recommendations</p>
+              <CardContent className="pt-4 pb-3 space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Crops Grown (optional)</Label>
+                  <Input
+                    placeholder="e.g. Mango, Pomegranate, Dragon Fruit"
+                    value={cropContext}
+                    onChange={(e) => setCropContext(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Comma-separated — used to tailor AI recommendations</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                    Farm Location (for weather forecast)
+                  </Label>
+                  <Input
+                    placeholder="e.g. Nashik, Pune, Nagpur"
+                    value={farmLocation}
+                    onChange={(e) => setFarmLocation(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Enables weather-integrated trend prediction</p>
+                </div>
               </CardContent>
             </Card>
 
@@ -315,7 +367,6 @@ export default function SoilClimate() {
               {/* ── FILE UPLOAD TAB ─────────────────────────────────────── */}
               <TabsContent value="upload" className="space-y-4 mt-3">
 
-                {/* Drop zone */}
                 <div
                   onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                   onDragLeave={() => setDragOver(false)}
@@ -336,7 +387,6 @@ export default function SoilClimate() {
                   />
                 </div>
 
-                {/* Column mapping */}
                 {rawHeaders.length > 0 && (
                   <Card>
                     <CardHeader className="pb-2">
@@ -350,7 +400,7 @@ export default function SoilClimate() {
                       {(["label", "ph", "moisture", "temperature", "humidity"] as const).map((field) => (
                         <div key={field} className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground w-24 shrink-0 capitalize">
-                            {field === "ph" ? "pH Level" : field === "label" ? "Row Label" : METRIC_LABELS[field as keyof typeof METRIC_LABELS] ?? field}
+                            {field === "ph" ? "pH Level" : field === "label" ? "Day Label" : METRIC_LABELS[field as keyof typeof METRIC_LABELS] ?? field}
                           </span>
                           <Select
                             value={colMap[field] ?? "__none__"}
@@ -388,7 +438,6 @@ export default function SoilClimate() {
                   </Card>
                 )}
 
-                {/* Preview table */}
                 {mappingDone && previewMapped.length > 0 && (
                   <Card>
                     <CardHeader className="pb-2">
@@ -399,17 +448,17 @@ export default function SoilClimate() {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-border">
-                              <th className="text-left py-1.5 pr-2 text-muted-foreground">Label</th>
+                              <th className="text-left py-1.5 pr-2 text-muted-foreground">Day</th>
                               <th className="text-right py-1.5 px-2 text-muted-foreground">pH</th>
-                              <th className="text-right py-1.5 px-2 text-muted-foreground">Moisture%</th>
+                              <th className="text-right py-1.5 px-2 text-muted-foreground">Moist%</th>
                               <th className="text-right py-1.5 px-2 text-muted-foreground">Temp°C</th>
-                              <th className="text-right py-1.5 pl-2 text-muted-foreground">Humidity%</th>
+                              <th className="text-right py-1.5 pl-2 text-muted-foreground">Humid%</th>
                             </tr>
                           </thead>
                           <tbody>
                             {previewMapped.slice(0, 10).map((r, i) => (
                               <tr key={i} className="border-b border-border/30">
-                                <td className="py-1.5 pr-2 max-w-[100px] truncate text-muted-foreground">{r.label || `Row ${i+1}`}</td>
+                                <td className="py-1.5 pr-2 max-w-[100px] truncate text-muted-foreground">{r.label || `Day ${i+1}`}</td>
                                 <td className="py-1.5 px-2 text-right">{r.ph || "—"}</td>
                                 <td className="py-1.5 px-2 text-right">{r.moisture || "—"}</td>
                                 <td className="py-1.5 px-2 text-right">{r.temperature || "—"}</td>
@@ -431,7 +480,9 @@ export default function SoilClimate() {
                         onClick={() => analyze(previewMapped)}
                         disabled={loading}
                       >
-                        {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Analyzing...</> : <><Activity className="w-4 h-4" />Run Live Analysis</>}
+                        {loading
+                          ? <><Loader2 className="w-4 h-4 animate-spin" />Analyzing...</>
+                          : <><Activity className="w-4 h-4" />Run Live Analysis</>}
                       </Button>
                     </CardContent>
                   </Card>
@@ -443,31 +494,31 @@ export default function SoilClimate() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center justify-between">
-                      <span>Manual Readings</span>
+                      <span>Day-wise Readings</span>
                       <Button size="sm" variant="outline" onClick={addRow} className="gap-1 h-7 text-xs">
                         <Plus className="w-3 h-3" />
-                        Add Row
+                        Add Day
                       </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {/* Header row */}
-                    <div className="grid grid-cols-[1fr_60px_64px_60px_64px_28px] gap-1.5 text-[11px] font-medium text-muted-foreground px-1">
-                      <span>Label</span>
+                    <div className="grid grid-cols-[1fr_56px_60px_56px_60px_28px] gap-1.5 text-[11px] font-medium text-muted-foreground px-1">
+                      <span>Day</span>
                       <span className="text-center">pH</span>
                       <span className="text-center">Moist%</span>
                       <span className="text-center">Temp°C</span>
                       <span className="text-center">Humid%</span>
                       <span />
                     </div>
-                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-0.5">
+                    <div className="space-y-1.5 max-h-80 overflow-y-auto pr-0.5">
                       {manualRows.map((row, i) => (
-                        <div key={i} className="grid grid-cols-[1fr_60px_64px_60px_64px_28px] gap-1.5">
+                        <div key={i} className="grid grid-cols-[1fr_56px_60px_56px_60px_28px] gap-1.5 items-center">
                           <Input
                             value={row.label}
                             onChange={(e) => updateRow(i, "label", e.target.value)}
-                            placeholder={`Reading ${i + 1}`}
-                            className="h-8 text-xs"
+                            placeholder={`Day ${i + 1}`}
+                            className="h-8 text-xs font-medium"
                           />
                           <Input
                             type="number" step="0.1" min="0" max="14"
@@ -511,12 +562,20 @@ export default function SoilClimate() {
                     <p className="text-[11px] text-muted-foreground px-1">
                       Optimal ranges: pH 6–7.5 · Moisture 40–70% · Temp 18–30°C · Humidity 50–80%
                     </p>
+                    {farmLocation && (
+                      <div className="flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-2 py-1.5">
+                        <Cloud className="w-3.5 h-3.5 shrink-0" />
+                        Weather forecast for <span className="font-semibold">{farmLocation}</span> will be included in trend prediction
+                      </div>
+                    )}
                     <Button
                       className="w-full gap-2"
                       onClick={() => analyze(manualRows)}
                       disabled={loading || manualRows.every((r) => !r.ph && !r.moisture && !r.temperature && !r.humidity)}
                     >
-                      {loading ? <><Loader2 className="w-4 h-4 animate-spin" />Analyzing...</> : <><Activity className="w-4 h-4" />Run Live Analysis</>}
+                      {loading
+                        ? <><Loader2 className="w-4 h-4 animate-spin" />Analyzing...</>
+                        : <><Activity className="w-4 h-4" />Run Live Analysis</>}
                     </Button>
                   </CardContent>
                 </Card>
@@ -537,14 +596,16 @@ export default function SoilClimate() {
               <div className="flex flex-col items-center justify-center min-h-80 text-center text-muted-foreground border-2 border-dashed rounded-xl p-10">
                 <FlaskConical className="w-10 h-10 mb-3 opacity-30" />
                 <p className="font-medium">No analysis yet</p>
-                <p className="text-sm mt-1 max-w-xs">Upload a file or enter readings manually, then click Run Live Analysis</p>
+                <p className="text-sm mt-1 max-w-xs">Enter day-wise readings and click Run Live Analysis to see trends and weather-integrated predictions</p>
               </div>
             )}
             {loading && (
               <div className="flex flex-col items-center justify-center min-h-80 text-muted-foreground">
                 <Loader2 className="w-10 h-10 animate-spin mb-3 text-primary" />
                 <p className="font-medium">Running AI analysis...</p>
-                <p className="text-sm mt-1 text-muted-foreground">Interpreting sensor readings and generating recommendations</p>
+                <p className="text-sm mt-1 text-muted-foreground">
+                  {farmLocation ? "Fetching weather forecast & generating trend predictions..." : "Interpreting day-wise readings and generating recommendations"}
+                </p>
               </div>
             )}
 
@@ -587,7 +648,7 @@ export default function SoilClimate() {
                             <span className="text-xs text-muted-foreground">{METRIC_LABELS[key]}</span>
                           </div>
                           <p className="text-2xl font-bold">{val != null ? val : "—"}</p>
-                          <p className="text-xs text-muted-foreground">avg across {result.summary.recordCount} readings</p>
+                          <p className="text-xs text-muted-foreground">avg across {result.summary.recordCount} days</p>
                           <div className="mt-1.5">
                             <StatusBadge status={status} />
                           </div>
@@ -601,34 +662,40 @@ export default function SoilClimate() {
                   })}
                 </div>
 
-                {/* Trend charts */}
+                {/* Day-wise trend charts */}
                 {chartData.length > 1 && (
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Readings Trend</CardTitle>
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-primary" />
+                        Day-wise Sensor Trends
+                      </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {/* pH + Moisture */}
                       <div>
-                        <p className="text-xs text-muted-foreground mb-1">pH Level & Moisture (%)</p>
-                        <ResponsiveContainer width="100%" height={150}>
+                        <p className="text-xs text-muted-foreground mb-1">pH Level & Soil Moisture (%)</p>
+                        <ResponsiveContainer width="100%" height={160}>
                           <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                             <XAxis dataKey="name" tick={{ fontSize: 9 }} />
                             <YAxis tick={{ fontSize: 9 }} />
-                            <Tooltip />
+                            <Tooltip
+                              formatter={(value, name) => [`${value}`, name]}
+                              labelFormatter={(l) => `${l}`}
+                            />
                             <Legend wrapperStyle={{ fontSize: 11 }} />
-                            <ReferenceLine y={6.0}   stroke="#8b5cf6" strokeDasharray="4 4" strokeOpacity={0.4} />
-                            <ReferenceLine y={7.5}   stroke="#8b5cf6" strokeDasharray="4 4" strokeOpacity={0.4} />
-                            <Line type="monotone" dataKey="ph"       name="pH"          stroke={METRIC_COLORS.ph}       strokeWidth={2} dot={{ r: 3 }} connectNulls />
-                            <Line type="monotone" dataKey="moisture" name="Moisture (%)" stroke={METRIC_COLORS.moisture} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                            <ReferenceLine y={6.0} stroke="#8b5cf6" strokeDasharray="4 4" strokeOpacity={0.4} />
+                            <ReferenceLine y={7.5} stroke="#8b5cf6" strokeDasharray="4 4" strokeOpacity={0.4} />
+                            <Line type="monotone" dataKey="ph"       name="pH"           stroke={METRIC_COLORS.ph}       strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                            <Line type="monotone" dataKey="moisture" name="Moisture (%)"  stroke={METRIC_COLORS.moisture} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
                       {/* Temperature + Humidity */}
                       <div>
                         <p className="text-xs text-muted-foreground mb-1">Temperature (°C) & Humidity (%)</p>
-                        <ResponsiveContainer width="100%" height={150}>
+                        <ResponsiveContainer width="100%" height={160}>
                           <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                             <XAxis dataKey="name" tick={{ fontSize: 9 }} />
@@ -637,12 +704,84 @@ export default function SoilClimate() {
                             <Legend wrapperStyle={{ fontSize: 11 }} />
                             <ReferenceLine y={18} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.4} />
                             <ReferenceLine y={30} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.4} />
-                            <Line type="monotone" dataKey="temperature" name="Temp (°C)"   stroke={METRIC_COLORS.temperature} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                            <Line type="monotone" dataKey="temperature" name="Temp (°C)"    stroke={METRIC_COLORS.temperature} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                             <Line type="monotone" dataKey="humidity"    name="Humidity (%)" stroke={METRIC_COLORS.humidity}    strokeWidth={2} dot={{ r: 3 }} connectNulls />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
                       <p className="text-[11px] text-muted-foreground">Dashed reference lines indicate optimal range boundaries</p>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Weather forecast trend */}
+                {result.weatherForecast && result.weatherForecast.length > 0 && (
+                  <Card className="border-blue-200 bg-blue-50/20">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2 text-blue-800">
+                        <Cloud className="w-4 h-4" />
+                        Weather Forecast Trend
+                        <Badge variant="outline" className="text-[10px] text-blue-700 border-blue-300 ml-1">
+                          {result.weatherForecast.length}-day outlook
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Forecast cards row */}
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {result.weatherForecast.map((d, i) => (
+                          <div key={i} className="shrink-0 flex flex-col items-center bg-white border border-blue-100 rounded-lg px-3 py-2 min-w-[72px]">
+                            <p className="text-[10px] text-muted-foreground font-medium">{d.dayLabel}</p>
+                            <p className="text-lg mt-0.5">{d.rainMm > 5 ? "🌧️" : d.rainMm > 0 ? "🌦️" : d.rainProbPct > 50 ? "⛅" : "☀️"}</p>
+                            <p className="text-xs font-bold">{d.tempMax}°<span className="font-normal text-muted-foreground">/{d.tempMin}°</span></p>
+                            <p className="text-[10px] text-blue-600">{d.humidity}% RH</p>
+                            {d.rainMm > 0 && <p className="text-[10px] text-blue-700 font-medium">{d.rainMm}mm</p>}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Temperature trend */}
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Forecast Temperature (°C)</p>
+                        <ResponsiveContainer width="100%" height={130}>
+                          <LineChart data={weatherChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                            <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <ReferenceLine y={18} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.4} />
+                            <ReferenceLine y={30} stroke="#ef4444" strokeDasharray="4 4" strokeOpacity={0.4} />
+                            <Line type="monotone" dataKey="tempMax" name="Max Temp (°C)" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line type="monotone" dataKey="tempMin" name="Min Temp (°C)" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 2" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Humidity + Rain */}
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Forecast Humidity (%) & Rainfall (mm)</p>
+                        <ResponsiveContainer width="100%" height={130}>
+                          <LineChart data={weatherChartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                            <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                            <YAxis yAxisId="left" tick={{ fontSize: 9 }} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: 11 }} />
+                            <Line yAxisId="left"  type="monotone" dataKey="humidity" name="Humidity (%)" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line yAxisId="right" type="monotone" dataKey="rainMm"   name="Rain (mm)"   stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Weather trend insight from AI */}
+                      {result.weatherTrendInsight && (
+                        <div className="bg-blue-100/60 border border-blue-200 rounded-lg p-3">
+                          <p className="text-xs font-semibold text-blue-800 mb-1">AI Weather Impact Analysis</p>
+                          <p className="text-sm text-blue-900 leading-relaxed">{result.weatherTrendInsight}</p>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -700,17 +839,17 @@ export default function SoilClimate() {
                   </CardContent>
                 </Card>
 
-                {/* Per-reading breakdown */}
+                {/* Per-day breakdown */}
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Per-Reading Breakdown</CardTitle>
+                    <CardTitle className="text-sm">Per-Day Breakdown</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3 max-h-96 overflow-y-auto pr-0.5">
                       {result.perRecordAnalysis.map((rec, i) => (
                         <div key={i} className="border border-border rounded-lg p-3">
                           <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                            <p className="font-medium text-sm">{rec.label}</p>
+                            <p className="font-semibold text-sm">{rec.label}</p>
                             <div className="flex gap-1 flex-wrap">
                               {(Object.entries(rec.statuses) as [string, Status][]).map(([k, s]) => (
                                 <StatusBadge key={k} status={s} label={k === "ph" ? "pH" : k} />

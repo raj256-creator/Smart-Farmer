@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -9,6 +10,17 @@ interface SoilClimateRecord {
   moisture?: number | null;
   temperature?: number | null;
   humidity?: number | null;
+}
+
+interface WeatherForecastDay {
+  date: string;
+  dayLabel: string;
+  tempMax: number;
+  tempMin: number;
+  humidity: number;
+  rainMm: number;
+  rainProbPct: number;
+  description: string;
 }
 
 // ── Ideal ranges per metric ───────────────────────────────────────────────────
@@ -35,10 +47,73 @@ function avg(nums: (number | null | undefined)[]): number | null {
   return parseFloat((valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(2));
 }
 
+// ── Weather forecast fetcher ──────────────────────────────────────────────────
+async function fetchWeatherForecast(location: string, apiKey: string): Promise<WeatherForecastDay[] | null> {
+  try {
+    const geoRes = await fetch(
+      `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(location)}&limit=1&appid=${apiKey}`
+    );
+    if (!geoRes.ok) return null;
+    const geoData = await geoRes.json() as Array<{ lat: number; lon: number; name: string }>;
+    if (!geoData.length) return null;
+    const { lat, lon } = geoData[0];
+
+    const frcRes = await fetch(
+      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&cnt=40&appid=${apiKey}`
+    );
+    if (!frcRes.ok) return null;
+    const frcData = await frcRes.json() as {
+      list: Array<{
+        dt: number;
+        main: { temp: number; humidity: number };
+        weather: Array<{ description: string }>;
+        rain?: { "3h"?: number };
+        pop: number;
+      }>;
+    };
+
+    const dayMap = new Map<string, {
+      temps: number[]; humidity: number[];
+      rainMm: number; popMax: number; description: string;
+    }>();
+
+    for (const f of frcData.list) {
+      const dayKey = new Date(f.dt * 1000).toISOString().slice(0, 10);
+      if (!dayMap.has(dayKey)) {
+        dayMap.set(dayKey, { temps: [], humidity: [], rainMm: 0, popMax: 0, description: f.weather[0]?.description ?? "" });
+      }
+      const day = dayMap.get(dayKey)!;
+      day.temps.push(f.main.temp);
+      day.humidity.push(f.main.humidity);
+      day.rainMm += f.rain?.["3h"] ?? 0;
+      day.popMax = Math.max(day.popMax, f.pop);
+      const hour = new Date(f.dt * 1000).getUTCHours();
+      if (hour >= 11 && hour <= 14) {
+        day.description = f.weather[0]?.description ?? day.description;
+      }
+    }
+
+    return Array.from(dayMap.entries()).slice(0, 7).map(([date, d]) => ({
+      date,
+      dayLabel: new Date(date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }),
+      tempMax:     Math.round(Math.max(...d.temps)),
+      tempMin:     Math.round(Math.min(...d.temps)),
+      humidity:    Math.round(d.humidity.reduce((a, b) => a + b, 0) / d.humidity.length),
+      rainMm:      parseFloat(d.rainMm.toFixed(1)),
+      rainProbPct: Math.round(d.popMax * 100),
+      description: d.description,
+    }));
+  } catch (err) {
+    logger.warn({ err }, "Weather fetch failed for soil-climate analysis");
+    return null;
+  }
+}
+
 router.post("/soil-climate/analyze", async (req, res): Promise<void> => {
-  const { records, cropContext = [] } = req.body as {
+  const { records, cropContext = [], location } = req.body as {
     records: SoilClimateRecord[];
     cropContext?: string[];
+    location?: string;
   };
 
   if (!records?.length) {
@@ -46,9 +121,15 @@ router.post("/soil-climate/analyze", async (req, res): Promise<void> => {
     return;
   }
 
+  // ── Fetch weather forecast in parallel with classification ────────────────
+  const apiKey = process.env["OPENWEATHER_API_KEY"];
+  const weatherPromise = (location && apiKey)
+    ? fetchWeatherForecast(location, apiKey)
+    : Promise.resolve(null);
+
   // ── Per-record classification ─────────────────────────────────────────────
   const perRecordAnalysis = records.map((rec, i) => {
-    const label = rec.label?.trim() || `Reading ${i + 1}`;
+    const label = rec.label?.trim() || `Day ${i + 1}`;
     const statuses = {
       ph:          classifyValue("ph",          rec.ph),
       moisture:    classifyValue("moisture",    rec.moisture),
@@ -100,33 +181,43 @@ router.post("/soil-climate/analyze", async (req, res): Promise<void> => {
   const metricScores = Object.values(avgStatuses).map((s) => scoreMap[s]);
   const overallHealthScore = Math.round(metricScores.reduce((a, b) => a + b, 0) / metricScores.length);
 
-  // ── AI narrative ──────────────────────────────────────────────────────────
+  // ── Await weather + build AI narrative ───────────────────────────────────
+  const weatherForecast = await weatherPromise;
+
   const dataDesc = records.slice(0, 20).map((r, i) => {
-    const lbl = r.label || `R${i + 1}`;
+    const lbl = r.label || `Day ${i + 1}`;
     return `${lbl}: pH=${r.ph ?? "N/A"}, moisture=${r.moisture ?? "N/A"}%, temp=${r.temperature ?? "N/A"}°C, humidity=${r.humidity ?? "N/A"}%`;
   }).join("\n");
 
-  const aiPrompt = `You are an expert soil and climate analyst for agriculture. Analyze the following sensor readings:
+  const weatherSection = weatherForecast?.length
+    ? `\n\nWeather forecast for coming days (${location}):\n${weatherForecast.map((d) =>
+        `${d.dayLabel}: max ${d.tempMax}°C / min ${d.tempMin}°C, humidity ${d.humidity}%, rain ${d.rainMm}mm (${d.rainProbPct}% chance), ${d.description}`
+      ).join("\n")}\n\nUsing this weather forecast, predict how the sensor metrics (pH, moisture, temperature, humidity) will trend over the coming days and provide weather-aware advice.`
+    : "";
+
+  const aiPrompt = `You are an expert soil and climate analyst for agriculture. The data below represents day-by-day sensor readings from a farm field.
 
 Crops grown: ${cropContext.length ? cropContext.join(", ") : "mixed / unspecified"}
-Number of readings: ${records.length}
+Number of days recorded: ${records.length}
 Average pH: ${summary.avgPh ?? "N/A"}, Average Moisture: ${summary.avgMoisture ?? "N/A"}%, Average Temperature: ${summary.avgTemperature ?? "N/A"}°C, Average Humidity: ${summary.avgHumidity ?? "N/A"}%
 
-Sample readings (up to 20):
+Day-wise readings:
 ${dataDesc}
+${weatherSection}
 
 Return a JSON object (no markdown) with:
 {
-  "trendInsights": "<2-3 sentences describing patterns and trends across the readings>",
+  "trendInsights": "<2-4 sentences describing day-by-day patterns, trends, and how the metrics are changing over time${weatherForecast ? ", incorporating the weather forecast" : ""}>",
+  "weatherTrendInsight": "${weatherForecast ? "<2-3 sentences specifically about how the upcoming weather will affect soil pH, moisture, and crop health>" : ""}",
   "overallAssessment": "<1-2 sentences overall soil-climate health summary>",
   "cropRecommendations": ["<specific actionable recommendation 1>", "<recommendation 2>", "<recommendation 3>"],
   "immediateActions": ["<urgent action if any critical values>", "<action 2>"],
-  "seasonalOutlook": "<1 sentence forecast or advice based on current conditions>"
+  "seasonalOutlook": "<1 sentence forecast or advice based on current conditions${weatherForecast ? " and weather forecast" : ""}>"
 }`;
 
   const aiResp = await openai.chat.completions.create({
     model: "gpt-4o",
-    max_completion_tokens: 800,
+    max_completion_tokens: 900,
     response_format: { type: "json_object" },
     messages: [{ role: "user", content: aiPrompt }],
   });
@@ -137,11 +228,13 @@ Return a JSON object (no markdown) with:
     avgStatuses,
     overallHealthScore,
     perRecordAnalysis,
-    trendInsights:       aiData.trendInsights ?? "",
-    overallAssessment:   aiData.overallAssessment ?? "",
-    cropRecommendations: aiData.cropRecommendations ?? [],
-    immediateActions:    aiData.immediateActions ?? [],
-    seasonalOutlook:     aiData.seasonalOutlook ?? "",
+    trendInsights:        aiData.trendInsights ?? "",
+    weatherTrendInsight:  aiData.weatherTrendInsight ?? "",
+    overallAssessment:    aiData.overallAssessment ?? "",
+    cropRecommendations:  aiData.cropRecommendations ?? [],
+    immediateActions:     aiData.immediateActions ?? [],
+    seasonalOutlook:      aiData.seasonalOutlook ?? "",
+    weatherForecast:      weatherForecast ?? null,
     ranges: RANGES,
   });
 });

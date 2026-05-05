@@ -5,6 +5,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 
 import Home from "@/pages/home";
+import Dashboard from "@/pages/dashboard";
+import SoilClimate from "@/pages/soil-climate";
+import ScanWizard from "@/pages/scan-wizard";
+import History from "@/pages/history";
+import Chat from "@/pages/chat";
 import FarmDashboard from "@/pages/farm-dashboard";
 import FarmChat from "@/pages/farm-chat";
 import FarmScan from "@/pages/farm-scan";
@@ -39,6 +44,13 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+
+      {/* Global routes */}
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/soil-climate" component={SoilClimate} />
+      <Route path="/scan/new" component={ScanWizard} />
+      <Route path="/history" component={History} />
+      <Route path="/chat" component={Chat} />
 
       {/* Per-farm routes */}
       <Route path="/farms/:id/dashboard">
