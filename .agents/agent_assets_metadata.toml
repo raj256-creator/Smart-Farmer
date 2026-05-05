@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "kG_aN3LVwqCRwXYJOqRQX"
+uri = "file://README.md"
+type = "text"
+title = "README.md — AI Smart Farming"
