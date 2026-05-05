@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, farmSensorBatches, farmSensorReadings, farms } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { predictSafe, smoothMovingAverage, calculateStepwiseTrend, clamp, METRIC_BOUNDS } from "../lib/predictionService.js";
 
 const router: IRouter = Router();
 
@@ -290,41 +291,35 @@ router.get("/farms/:id/predictions", async (req, res): Promise<void> => {
 
   for (const metric of ["ph", "moisture", "temperature", "humidity"] as MetricKey[]) {
     const values = extractSeries(metric);
-    if (values.length < 3) {
-      predictions[metric] = { hasData: false };
-      continue;
-    }
 
-    const reg         = linearRegression(values);
-    const n           = values.length;
-    const currentStep = n - 1;
-    const currentVal  = values[currentStep];
-    const ma3         = movingAvg(values, 3);
+    // Use safe prediction pipeline (handles <3 data points gracefully)
+    const safePreds = predictSafe(metric, values, PREDICT_DAYS);
 
-    // Predict at future batch steps (convert days → batch steps)
-    const futureSteps = PREDICT_DAYS.map((days) =>
-      currentStep + days / Math.max(avgBatchIntervalDays, 0.5)
-    );
-
-    const predictedByDay = PREDICT_DAYS.map((days, i) => ({
-      days,
-      linear: parseFloat(Math.max(0, predictAtStep(reg, futureSteps[i])).toFixed(2)),
-      movingAvg: parseFloat(Math.max(0, ma3 + reg.slope * (futureSteps[i] - currentStep)).toFixed(2)),
-    }));
-
-    // Risk: days until value leaves optimal range
-    const daysToRisk = daysUntilCritical(metric, currentVal, reg.slope, currentStep, avgBatchIntervalDays);
+    const currentVal = values.length > 0 ? values[values.length - 1] : 0;
+    const ma3        = movingAvg(values, 3);
+    const reg        = values.length >= 2 ? linearRegression(values) : { slope: 0, intercept: currentVal, r2: 0 };
     const direction  = trendDirection(reg.slope, metric, stdDev(values));
 
-    // Status of each future prediction
+    // Build predictedByDay with safe values + clamped/rateLimited flags
+    const predictedByDay = safePreds.map((p) => ({
+      days: p.days,
+      linear: p.value,
+      movingAvg: p.value,
+      clamped: p.clamped,
+      rateLimited: p.rateLimited,
+    }));
+
     const futureStatuses = predictedByDay.map((p) => ({
       days: p.days,
       value: p.linear,
       status: classifyValue(metric, p.linear),
     }));
 
+    // Risk: days until value leaves optimal range (use damped trend)
+    const daysToRisk = daysUntilCritical(metric, currentVal, reg.slope * 0.3, values.length - 1, avgBatchIntervalDays);
+
     predictions[metric] = {
-      hasData: true,
+      hasData: values.length >= 1,
       current: currentVal,
       movingAvg3: ma3,
       regression: reg,
@@ -334,14 +329,15 @@ router.get("/farms/:id/predictions", async (req, res): Promise<void> => {
       daysToRisk,
     };
 
-    // Generate insights
+    if (values.length < 3) continue;
+
+    // Generate insights using safe predicted values
     const unitMap: Record<MetricKey, string> = { ph: "", moisture: "%", temperature: "°C", humidity: "%" };
     const labelMap: Record<MetricKey, string> = { ph: "Soil pH", moisture: "Soil Moisture", temperature: "Temperature", humidity: "Humidity" };
     const unit   = unitMap[metric];
     const label  = labelMap[metric];
     const [optLo, optHi] = OPTIMAL[metric];
 
-    // Moisture-specific: most critical for farming
     if (metric === "moisture") {
       const day3Pred = predictedByDay.find((p) => p.days === 3)?.linear ?? ma3;
       const day7Pred = predictedByDay.find((p) => p.days === 7)?.linear ?? ma3;
@@ -360,7 +356,6 @@ router.get("/farms/:id/predictions", async (req, res): Promise<void> => {
         alerts.push({ metric, severity: "warning", message: insight });
       }
 
-      // Critical risk
       if (classifyValue(metric, day3Pred) === "critical") {
         alerts.push({
           metric,
@@ -401,7 +396,7 @@ router.get("/farms/:id/predictions", async (req, res): Promise<void> => {
   const tempVals     = extractSeries("temperature");
   const humidityVals = extractSeries("humidity");
 
-  let yieldScore = 70; // baseline %
+  let yieldScore = 70;
   const yieldFactors: string[] = [];
 
   if (moistureVals.length >= 3) {

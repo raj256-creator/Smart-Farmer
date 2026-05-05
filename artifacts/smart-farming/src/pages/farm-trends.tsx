@@ -53,7 +53,7 @@ type TrendsResponse = {
   }>;
 };
 
-type PredictedDay = { days: number; linear: number; movingAvg: number };
+type PredictedDay = { days: number; linear: number; movingAvg: number; clamped?: boolean; rateLimited?: boolean };
 type FutureStatus = { days: number; value: number; status: "optimal" | "warning" | "critical" };
 type MetricPrediction = {
   hasData: boolean;
@@ -288,6 +288,8 @@ function PredictionCard({ metric, pred }: { metric: keyof typeof METRIC_CONFIG; 
   const cfg = METRIC_CONFIG[metric];
   if (!pred.hasData || !pred.predictedByDay) return null;
 
+  const anyAdjusted = pred.predictedByDay.some((p) => p.clamped || p.rateLimited);
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -302,15 +304,25 @@ function PredictionCard({ metric, pred }: { metric: keyof typeof METRIC_CONFIG; 
             const fs = pred.futureStatuses?.find((f) => f.days === p.days);
             const st = fs?.status ?? "optimal";
             const ss = STATUS_STYLES[st];
+            const wasAdjusted = p.clamped || p.rateLimited;
             return (
-              <div key={p.days} className={`rounded-lg p-2 text-center border ${ss.border} ${ss.bg}`}>
+              <div key={p.days} className={`rounded-lg p-2 text-center border ${ss.border} ${ss.bg} relative`}>
                 <p className="text-[10px] text-muted-foreground">+{p.days}d</p>
                 <p className={`text-sm font-bold ${ss.text}`}>{p.linear}{cfg.unit}</p>
                 <p className={`text-[9px] font-medium mt-0.5 ${ss.text}`}>{st}</p>
+                {wasAdjusted && (
+                  <span className="absolute -top-1.5 -right-1.5 text-[8px] bg-amber-400 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold leading-none" title="Adjusted to realistic range">!</span>
+                )}
               </div>
             );
           })}
         </div>
+        {anyAdjusted && (
+          <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mt-2 flex items-center gap-1.5">
+            <AlertTriangle className="w-3 h-3 shrink-0" />
+            Values marked <strong className="mx-0.5">!</strong> were adjusted to realistic agricultural range
+          </p>
+        )}
         {pred.daysToRisk != null && pred.daysToRisk > 0 && pred.daysToRisk <= 14 && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mt-2 flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
