@@ -1,0 +1,2 @@
+#!/bin/bash
+echo "$GITHUB_PERSONAL_ACCESS_TOKEN"
