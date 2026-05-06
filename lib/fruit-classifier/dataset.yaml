@@ -1,0 +1,21 @@
+# YOLOv8 Dataset Configuration
+# 5-class fruit detection: Mango, Mulberry, Dragon Fruit, Chikoo, Pomegranate
+#
+# After running download_datasets.py this file is auto-updated with the
+# correct absolute paths. You can also set them manually below.
+
+path: ./data                    # root dataset directory (relative to this file)
+train: images/train             # training images (relative to path)
+val:   images/val               # validation images (relative to path)
+test:  images/test              # test images (relative to path, optional)
+
+# Number of classes
+nc: 5
+
+# Class names — order must match label indices 0–4
+names:
+  0: mango
+  1: mulberry
+  2: dragon_fruit
+  3: chikoo
+  4: pomegranate
